@@ -1,0 +1,560 @@
+import { expect, test } from 'bun:test'
+import { generateKeyPairSigner, getBase58Decoder } from '@solana/kit'
+import { betterAuth } from 'better-auth'
+import { memoryAdapter } from 'better-auth/adapters/memory'
+import { createAuthClient } from 'better-auth/client'
+import { convertSetCookieToCookie } from 'better-auth/test'
+import { createSIWSInput, siwsClient } from '../src/client.ts'
+import { SIWS_ERROR_CODES } from '../src/error-codes.ts'
+import { siws } from '../src/index.ts'
+import { formatSIWSMessage } from '../src/siws.ts'
+import { generateNonce } from '../src/verify-signature.ts'
+
+interface AccountRow {
+  accountId: string
+  providerId: string
+  userId: string
+}
+
+interface SIWSTestClient {
+  getSession(): Promise<{ data?: { user: { id: string } } | null }>
+  siws: {
+    nonce(args: { cluster?: string; walletAddress: string }): Promise<{
+      data?: {
+        cluster: string
+        domain: string
+        expirationTime: string
+        issuedAt: string
+        nonce: string
+        uri: string
+      } | null
+    }>
+    verify(args: {
+      cluster?: string
+      email?: string
+      message: string
+      signature: string
+      walletAddress: string
+    }): Promise<{
+      data?: {
+        success: true
+        token: string
+        user: {
+          cluster: string
+          id: string
+          walletAddress: string
+        }
+      } | null
+    }>
+  }
+}
+
+interface MemoryDB {
+  [model: string]: Record<string, unknown>[]
+}
+
+interface SolanaWalletRow {
+  address: string
+  cluster: string
+  userId: string
+}
+
+interface UserRow {
+  email: string
+  id: string
+  name: string
+}
+
+interface VerificationRow {
+  expiresAt: Date
+  identifier: string
+}
+
+function createCookieJarFetch(handler: (request: Request) => Promise<Response>) {
+  const cookieJar = new Headers()
+
+  return async (input: Request | URL | string, init?: RequestInit) => {
+    const request =
+      input instanceof Request ? input : new Request(typeof input === 'string' ? input : input.toString(), init)
+    const requestHeaders = new Headers(cookieJar)
+    const extraHeaders = new Headers(request.headers)
+
+    extraHeaders.forEach((value, key) => {
+      requestHeaders.set(key, value)
+    })
+
+    const response = await handler(
+      new Request(request.url, {
+        body: request.body,
+        duplex: 'half',
+        headers: requestHeaders,
+        method: request.method,
+      }),
+    )
+    const responseHeaders = new Headers()
+    const currentCookies = cookieJar.get('cookie')
+
+    if (currentCookies) {
+      responseHeaders.set('cookie', currentCookies)
+    }
+
+    response.headers.forEach((value, key) => {
+      responseHeaders.append(key, value)
+    })
+
+    convertSetCookieToCookie(responseHeaders)
+
+    const cookie = responseHeaders.get('cookie')
+
+    if (cookie) {
+      cookieJar.set('cookie', cookie)
+    }
+
+    return response
+  }
+}
+
+async function createHarness(options?: { anonymous?: boolean; emailDomainName?: string; nonceExpirationMs?: number }) {
+  const db: MemoryDB = {
+    account: [],
+    session: [],
+    solanaWallet: [],
+    user: [],
+    verification: [],
+  }
+  const auth = betterAuth({
+    baseURL: 'https://example.com',
+    database: memoryAdapter(db),
+    plugins: [
+      siws({
+        anonymous: options?.anonymous,
+        domain: 'example.com',
+        emailDomainName: options?.emailDomainName,
+        nonceExpirationMs: options?.nonceExpirationMs,
+      }),
+    ],
+    rateLimit: {
+      enabled: false,
+    },
+    secret: 'better-auth-secret-that-is-long-enough-for-validation-test',
+  })
+  const customFetchImpl = createCookieJarFetch(auth.handler)
+  const authClient = createAuthClient({
+    baseURL: 'https://example.com/api/auth',
+    fetchOptions: {
+      customFetchImpl,
+    },
+    plugins: [siwsClient()],
+  }) as unknown as SIWSTestClient
+
+  return {
+    authClient,
+    customFetchImpl,
+    db,
+  }
+}
+
+function getRows<T>(db: MemoryDB, model: string) {
+  return (db[model] ?? []) as T[]
+}
+
+function createMessage(args: {
+  address: string
+  challenge: {
+    cluster: string
+    domain: string
+    expirationTime: string
+    issuedAt: string
+    nonce: string
+    uri: string
+  }
+  statement?: string
+}) {
+  const signInInput = createSIWSInput({
+    address: args.address,
+    challenge: args.challenge,
+    statement: args.statement ?? 'Sign in to Example',
+  })
+
+  return formatSIWSMessage({
+    address: signInInput.address,
+    chainId: signInInput.chainId,
+    domain: signInInput.domain,
+    expirationTime: signInInput.expirationTime,
+    issuedAt: signInInput.issuedAt,
+    nonce: signInInput.nonce,
+    statement: signInInput.statement,
+    uri: signInInput.uri,
+    version: signInInput.version,
+  })
+}
+
+async function signMessage(args: {
+  address: string
+  message: string
+  signer: Awaited<ReturnType<typeof generateKeyPairSigner>>
+}) {
+  const signedMessages = await args.signer.signMessages([
+    {
+      content: new TextEncoder().encode(args.message),
+      signatures: {},
+    },
+  ])
+  const signedOutput = signedMessages[0] as Record<string, Record<number, number> | Uint8Array>
+  const rawSignature = signedOutput[args.address]
+
+  if (!rawSignature) {
+    throw new Error('Missing signed message output')
+  }
+
+  return getBase58Decoder().decode(
+    rawSignature instanceof Uint8Array ? rawSignature : Uint8Array.from(Object.values(rawSignature)),
+  )
+}
+
+async function signIn(args: {
+  authClient: SIWSTestClient
+  cluster?: string
+  email?: string
+  signer?: Awaited<ReturnType<typeof generateKeyPairSigner>>
+}) {
+  const cluster = args.cluster ?? 'mainnet'
+  const signer = args.signer ?? (await generateKeyPairSigner())
+  const address = signer.address
+  const nonceResult = await args.authClient.siws.nonce({
+    cluster,
+    walletAddress: address,
+  })
+
+  if (!nonceResult.data) {
+    throw new Error('Expected SIWS nonce response')
+  }
+
+  const message = createMessage({
+    address,
+    challenge: nonceResult.data,
+  })
+  const signature = await signMessage({
+    address,
+    message,
+    signer,
+  })
+  const verifyResult = await args.authClient.siws.verify({
+    cluster,
+    email: args.email,
+    message,
+    signature,
+    walletAddress: address,
+  })
+
+  if (!verifyResult.data) {
+    throw new Error('Expected SIWS verify response')
+  }
+
+  return {
+    address,
+    cluster,
+    verifyResult: verifyResult.data,
+  }
+}
+
+async function postJSON(args: {
+  body: Record<string, unknown>
+  customFetchImpl: (url: string, init?: RequestInit) => Promise<Response>
+  path: string
+}) {
+  const response = await args.customFetchImpl(`https://example.com/api/auth${args.path}`, {
+    body: JSON.stringify(args.body),
+    headers: {
+      'content-type': 'application/json',
+    },
+    method: 'POST',
+  })
+
+  return {
+    data: (await response.json()) as Record<string, unknown>,
+    response,
+  }
+}
+
+test('generates a hex nonce with the requested length', () => {
+  expect(generateNonce(17)).toMatch(/^[0-9a-f]{17}$/)
+})
+
+test('authClient.siws.nonce and verify create a native Better Auth session, wallet, and account', async () => {
+  const harness = await createHarness()
+  const signInResult = await signIn({
+    authClient: harness.authClient,
+  })
+  const account = getRows<AccountRow>(harness.db, 'account').find(
+    (value) => value.accountId === `${signInResult.address}:${signInResult.cluster}` && value.providerId === 'siws',
+  )
+  const sessionResult = await harness.authClient.getSession()
+  const user = getRows<UserRow>(harness.db, 'user').find((value) => value.id === signInResult.verifyResult.user.id)
+  const wallet = getRows<SolanaWalletRow>(harness.db, 'solanaWallet').find(
+    (value) => value.address === signInResult.address && value.cluster === signInResult.cluster,
+  )
+
+  expect(signInResult.verifyResult).toEqual({
+    success: true,
+    token: expect.any(String),
+    user: {
+      cluster: 'mainnet',
+      id: expect.any(String),
+      walletAddress: signInResult.address,
+    },
+  })
+  expect(account).toMatchObject({
+    accountId: `${signInResult.address}:${signInResult.cluster}`,
+    providerId: 'siws',
+    userId: signInResult.verifyResult.user.id,
+  })
+  expect(sessionResult.data?.user.id).toBe(signInResult.verifyResult.user.id)
+  expect(user).toMatchObject({
+    email: `${signInResult.address.toLowerCase()}@example.com`,
+    id: signInResult.verifyResult.user.id,
+    name: signInResult.address,
+  })
+  expect(wallet).toMatchObject({
+    address: signInResult.address,
+    cluster: signInResult.cluster,
+    userId: signInResult.verifyResult.user.id,
+  })
+})
+
+test('re-signing the same address and cluster reuses the same user and does not duplicate wallet or account rows', async () => {
+  const harness = await createHarness()
+  const signer = await generateKeyPairSigner()
+  const firstResult = await signIn({
+    authClient: harness.authClient,
+    signer,
+  })
+  const secondResult = await signIn({
+    authClient: harness.authClient,
+    signer,
+  })
+  const accounts = getRows<AccountRow>(harness.db, 'account').filter(
+    (value) => value.providerId === 'siws' && value.userId === firstResult.verifyResult.user.id,
+  )
+  const wallets = getRows<SolanaWalletRow>(harness.db, 'solanaWallet').filter(
+    (value) => value.userId === firstResult.verifyResult.user.id,
+  )
+
+  expect(secondResult.verifyResult.user.id).toBe(firstResult.verifyResult.user.id)
+  expect(accounts).toHaveLength(1)
+  expect(wallets).toHaveLength(1)
+})
+
+test('signing the same address on a different cluster reuses the same user and creates another wallet and account row', async () => {
+  const harness = await createHarness()
+  const signer = await generateKeyPairSigner()
+  const mainnetResult = await signIn({
+    authClient: harness.authClient,
+    cluster: 'mainnet',
+    signer,
+  })
+  const devnetResult = await signIn({
+    authClient: harness.authClient,
+    cluster: 'devnet',
+    signer,
+  })
+  const accounts = getRows<AccountRow>(harness.db, 'account').filter(
+    (value) => value.providerId === 'siws' && value.userId === mainnetResult.verifyResult.user.id,
+  )
+  const wallets = getRows<SolanaWalletRow>(harness.db, 'solanaWallet').filter(
+    (value) => value.userId === mainnetResult.verifyResult.user.id,
+  )
+
+  expect(devnetResult.verifyResult.user.id).toBe(mainnetResult.verifyResult.user.id)
+  expect(accounts).toHaveLength(2)
+  expect(wallets).toHaveLength(2)
+  expect(accounts.map((account) => account.accountId).sort()).toEqual([
+    `${mainnetResult.address}:devnet`,
+    `${mainnetResult.address}:mainnet`,
+  ])
+})
+
+test('returns a stable error code when email is missing and anonymous mode is disabled', async () => {
+  const harness = await createHarness({
+    anonymous: false,
+  })
+  const signer = await generateKeyPairSigner()
+  const nonceResult = await harness.authClient.siws.nonce({
+    cluster: 'mainnet',
+    walletAddress: signer.address,
+  })
+
+  if (!nonceResult.data) {
+    throw new Error('Expected SIWS nonce response')
+  }
+
+  const message = createMessage({
+    address: signer.address,
+    challenge: nonceResult.data,
+  })
+  const signature = await signMessage({
+    address: signer.address,
+    message,
+    signer,
+  })
+  const { data, response } = await postJSON({
+    body: {
+      cluster: 'mainnet',
+      message,
+      signature,
+      walletAddress: signer.address,
+    },
+    customFetchImpl: harness.customFetchImpl,
+    path: '/siws/verify',
+  })
+
+  expect(response.status).toBe(400)
+  expect(data.code).toBe(SIWS_ERROR_CODES.EMAIL_REQUIRED.code)
+})
+
+test('returns a stable error code when the nonce is invalid or expired', async () => {
+  const harness = await createHarness()
+  const signer = await generateKeyPairSigner()
+  const invalidNonceMessage = formatSIWSMessage({
+    address: signer.address,
+    chainId: 'mainnet',
+    domain: 'example.com',
+    expirationTime: '2026-03-11T00:15:00.000Z',
+    issuedAt: '2026-03-11T00:00:00.000Z',
+    nonce: 'missing-nonce',
+    statement: 'Sign in to Example',
+    uri: 'https://example.com/api/auth',
+    version: '1',
+  })
+  const invalidNonceSignature = await signMessage({
+    address: signer.address,
+    message: invalidNonceMessage,
+    signer,
+  })
+  const invalidNonceResult = await postJSON({
+    body: {
+      cluster: 'mainnet',
+      message: invalidNonceMessage,
+      signature: invalidNonceSignature,
+      walletAddress: signer.address,
+    },
+    customFetchImpl: harness.customFetchImpl,
+    path: '/siws/verify',
+  })
+  const nonceResult = await harness.authClient.siws.nonce({
+    cluster: 'mainnet',
+    walletAddress: signer.address,
+  })
+
+  if (!nonceResult.data) {
+    throw new Error('Expected SIWS nonce response')
+  }
+
+  const identifier = `siws:${signer.address}:mainnet`
+  const message = createMessage({
+    address: signer.address,
+    challenge: nonceResult.data,
+  })
+  const signature = await signMessage({
+    address: signer.address,
+    message,
+    signer,
+  })
+
+  const verification = getRows<VerificationRow>(harness.db, 'verification').find(
+    (value) => value.identifier === identifier,
+  )
+
+  if (!verification) {
+    throw new Error('Expected verification row')
+  }
+
+  verification.expiresAt = new Date(Date.now() - 1)
+
+  const expiredNonceResult = await postJSON({
+    body: {
+      cluster: 'mainnet',
+      message,
+      signature,
+      walletAddress: signer.address,
+    },
+    customFetchImpl: harness.customFetchImpl,
+    path: '/siws/verify',
+  })
+
+  expect(invalidNonceResult.response.status).toBe(401)
+  expect(invalidNonceResult.data.code).toBe(SIWS_ERROR_CODES.INVALID_OR_EXPIRED_NONCE.code)
+  expect(expiredNonceResult.response.status).toBe(401)
+  expect(expiredNonceResult.data.code).toBe(SIWS_ERROR_CODES.INVALID_OR_EXPIRED_NONCE.code)
+})
+
+test('returns stable error codes for mismatched messages and invalid signatures', async () => {
+  const harness = await createHarness()
+  const signer = await generateKeyPairSigner()
+  const nonceResult = await harness.authClient.siws.nonce({
+    cluster: 'mainnet',
+    walletAddress: signer.address,
+  })
+
+  if (!nonceResult.data) {
+    throw new Error('Expected SIWS nonce response')
+  }
+
+  const mismatchedMessage = createMessage({
+    address: signer.address,
+    challenge: {
+      ...nonceResult.data,
+      nonce: 'different-nonce',
+    },
+  })
+  const mismatchedSignature = await signMessage({
+    address: signer.address,
+    message: mismatchedMessage,
+    signer,
+  })
+  const mismatchedResult = await postJSON({
+    body: {
+      cluster: 'mainnet',
+      message: mismatchedMessage,
+      signature: mismatchedSignature,
+      walletAddress: signer.address,
+    },
+    customFetchImpl: harness.customFetchImpl,
+    path: '/siws/verify',
+  })
+  const validMessage = createMessage({
+    address: signer.address,
+    challenge: nonceResult.data,
+  })
+  const invalidSignatureSigner = await generateKeyPairSigner()
+  const invalidSignature = await signMessage({
+    address: invalidSignatureSigner.address,
+    message: validMessage,
+    signer: invalidSignatureSigner,
+  })
+  const invalidSignatureResult = await postJSON({
+    body: {
+      cluster: 'mainnet',
+      message: validMessage,
+      signature: invalidSignature,
+      walletAddress: signer.address,
+    },
+    customFetchImpl: harness.customFetchImpl,
+    path: '/siws/verify',
+  })
+
+  expect(mismatchedResult.response.status).toBe(401)
+  expect(mismatchedResult.data.code).toBe(SIWS_ERROR_CODES.MESSAGE_MISMATCH.code)
+  expect(invalidSignatureResult.response.status).toBe(401)
+  expect(invalidSignatureResult.data.code).toBe(SIWS_ERROR_CODES.INVALID_SIGNATURE.code)
+})
+
+test('uses the Better Auth base URL host for generated fallback emails', async () => {
+  const harness = await createHarness()
+  const signInResult = await signIn({
+    authClient: harness.authClient,
+  })
+  const user = getRows<UserRow>(harness.db, 'user').find((value) => value.id === signInResult.verifyResult.user.id)
+
+  expect(user?.email).toBe(`${signInResult.address.toLowerCase()}@example.com`)
+})

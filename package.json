@@ -1,13 +1,23 @@
 {
-  "dependencies": {},
+  "bugs": {
+    "url": "https://github.com/beeman/better-auth-solana/issues"
+  },
+  "dependencies": {
+    "@better-auth/core": "^1.5.0",
+    "zod": "^4.3.6"
+  },
+  "description": "Better Auth plugin for Solana sign-in.",
   "devDependencies": {
     "@biomejs/biome": "2.4.6",
     "@changesets/cli": "^2.29.8",
     "@intellectronica/ruler": "^0.3.34",
+    "@solana/kit": "^6.0.0",
     "@types/bun": "^1.3.9",
+    "better-auth": "^1.5.0",
     "pkg-pr-new": "^0.0.62",
     "publint": "^0.3.16",
-    "tsdown": "^0.20.3"
+    "tsdown": "^0.20.3",
+    "typescript": "^5.9.3"
   },
   "exports": {
     ".": {
@@ -19,33 +29,69 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./client": {
+      "import": {
+        "types": "./dist/client.d.mts",
+        "default": "./dist/client.mjs"
+      },
+      "require": {
+        "types": "./dist/client.d.cts",
+        "default": "./dist/client.cjs"
+      }
+    },
+    "./schema": {
+      "import": {
+        "types": "./dist/schema.d.mts",
+        "default": "./dist/schema.mjs"
+      },
+      "require": {
+        "types": "./dist/schema.d.cts",
+        "default": "./dist/schema.cjs"
+      }
     }
   },
   "files": [
     "dist"
+  ],
+  "homepage": "https://github.com/beeman/better-auth-solana",
+  "keywords": [
+    "authentication",
+    "better-auth",
+    "siws",
+    "solana",
+    "wallet"
   ],
   "license": "MIT",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "name": "better-auth-solana",
   "peerDependencies": {
+    "@solana/kit": "^6.0.0",
+    "better-auth": "^1.5.0",
     "typescript": "^5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beeman/better-auth-solana.git"
   },
   "scripts": {
     "build": "tsdown",
     "changeset": "changeset",
     "check-types": "tsc -b --noEmit",
-    "ci": "bun run build && bun run lint && bun run check-types && bun test",
+    "ci": "bun run build && bun run lint && bun run check-types && bun run test",
     "lint": "biome check --error-on-warnings",
     "lint:fix": "biome check --error-on-warnings --write",
     "release": "changeset publish",
     "ruler:apply": "ruler apply --local-only",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
+    "test": "bun test ./test",
+    "test:watch": "bun test --watch ./test",
     "version": "changeset version && bun lint:fix"
   },
   "type": "module",
   "types": "./dist/index.d.mts",
-  "version": "0.0.0",
-  "description": ""
+  "version": "0.0.0"
 }

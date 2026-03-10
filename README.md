@@ -1,74 +1,131 @@
 # better-auth-solana
 
-This is a template for creating a modern TypeScript library or package using [Bun](https://bun.sh/). It comes pre-configured with essential tools for development, testing, linting, and publishing.
+`better-auth-solana` is a Better Auth plugin for Sign in With Solana.
 
-## Features
+It uses the Better Auth plugin namespace `siws` and requires `better-auth` `^1.5.0`.
 
-*   **Bun-first development**: Leverages Bun for lightning-fast installs, runs, and tests.
-*   **TypeScript support**: Write type-safe code from the start.
-*   **Linting & Formatting**: Enforced with [Biome](https://biomejs.dev/) for consistent code style.
-*   **Bundling**: Uses [tsdown](https://tsdown.js.org/) for efficient bundling into ESM and CJS formats, with type declarations.
-*   **Testing**: Built-in unit testing with `bun test`.
-*   **Versioning & Publishing**: Managed with [Changesets](https://github.com/changesets/changesets) for streamlined releases to npm.
-*   **GitHub Actions**: Continuous Integration (CI) workflows for automated build, test, lint, and publish processes.
+It exposes three public entrypoints:
 
-## Getting Started
+- `better-auth-solana` for the server plugin
+- `better-auth-solana/client` for client helpers
+- `better-auth-solana/schema` for the default Solana wallet schema
 
-To use this template, you typically would use a scaffolding tool like `bunx create-something -t better-auth-solana`.
+## Install
 
-### Installation
+```bash
+bun add @solana/kit better-auth better-auth-solana
+```
 
-If you're using this template directly (e.g., after cloning), you can install dependencies with Bun:
+## Server
+
+```ts
+import { betterAuth } from 'better-auth'
+import { siws } from 'better-auth-solana'
+
+export const auth = betterAuth({
+  database: myDatabase,
+  plugins: [
+    siws({
+      domain: 'example.com',
+    }),
+  ],
+})
+```
+
+The plugin adds these Better Auth endpoints:
+
+- `POST /siws/nonce`
+- `POST /siws/verify`
+
+`POST /siws/nonce` accepts `{ walletAddress, cluster? }` and stores a cluster-bound challenge in Better Auth verification storage under `siws:<walletAddress>:<cluster>`.
+
+`POST /siws/verify` accepts `{ walletAddress, message, signature, cluster?, email? }`, verifies the signed SIWS payload, creates or reuses the Better Auth user, persists a `solanaWallet` row, persists an `account` row with `providerId: "siws"`, and establishes the Better Auth session with native session cookies.
+
+## Client
+
+`better-auth-solana/client` exports `siwsClient()` for Better Auth client inference and `createSIWSInput(...)` for building the wallet sign-in payload.
+
+```ts
+import { createAuthClient } from 'better-auth/client'
+import { createSIWSInput, siwsClient } from 'better-auth-solana/client'
+
+const authClient = createAuthClient({
+  plugins: [siwsClient()],
+})
+
+const nonceResult = await authClient.siws.nonce({
+  cluster: 'mainnet',
+  walletAddress: address,
+})
+
+if (!nonceResult.data) {
+  throw new Error('Failed to request SIWS nonce')
+}
+
+const siwsInput = createSIWSInput({
+  address,
+  challenge: nonceResult.data,
+  statement: 'Sign in to Example',
+})
+
+const signed = await signWithYourWallet(siwsInput)
+
+await authClient.siws.verify({
+  cluster: 'mainnet',
+  message: signed.message,
+  signature: signed.signature,
+  walletAddress: address,
+})
+
+const session = await authClient.getSession()
+```
+
+The server validates the signed message against the issued `domain`, `uri`, `chainId`, `nonce`, `issuedAt`, and `expirationTime`. The `statement` remains client-controlled.
+
+## Default Schema
+
+```ts
+import { solanaWalletSchema } from 'better-auth-solana/schema'
+```
+
+The default `solanaWallet` model contains:
+
+- `address`
+- `cluster`
+- `createdAt`
+- `userId`
+
+The plugin stores one wallet row per `address + cluster`, but reuses the same Better Auth user when the same address signs in on another cluster.
+
+## Options
+
+`siws()` accepts:
+
+- `anonymous` default `true`
+- `domain` required
+- `emailDomainName` optional
+- `nonceExpirationMs` default `900000`
+- `schema` optional Better Auth schema field overrides for `solanaWallet`
+
+When `anonymous` is `false`, `email` is required on `/siws/verify`.
+
+When `emailDomainName` is omitted, generated fallback emails use the Better Auth base URL host.
+
+## Notes
+
+- The account id format is `<walletAddress>:<cluster>`.
+- The account provider id is `siws`.
+- The client surface is `authClient.siws.nonce(...)` and `authClient.siws.verify(...)`.
+- The package name is `better-auth-solana`; the plugin namespace is `siws`.
+
+## Development
 
 ```bash
 bun install
+bun run build
+bun run check-types
+bun run lint
+bun run lint:fix
+bun run test
+bun run test:watch
 ```
-
-### Development
-
-*   **Build**: `bun run build`
-*   **Type Check**: `bun run check-types`
-*   **Lint**: `bun run lint`
-*   **Lint & Fix**: `bun run lint:fix`
-*   **Test**: `bun test`
-*   **Test (Watch Mode)**: `bun run test:watch`
-
-### Publishing
-
-This template uses Changesets for versioning and publishing.
-
-1.  **Add a changeset**:
-    ```bash
-    bun changeset
-    ```
-    Follow the prompts to describe your changes. This will create a markdown file in `.changeset/`.
-
-2.  **Version packages**:
-    ```bash
-    bun run version
-    ```
-    This command reads the changeset files, updates package versions, updates `CHANGELOG.md`, and deletes the used changeset files. It also runs `bun lint:fix`.
-
-3.  **Publish to npm**:
-    ```bash
-    bun run release
-    ```
-    This command builds the package and publishes it to npm. Ensure you are logged into npm (`npm login`) or have `NPM_TOKEN` configured in your CI environment.
-
-## Project Structure
-
-```
-.
-├── src/             # Source code for your library
-│   └── index.ts     # Main entry point for your library
-├── test/            # Unit tests
-│   └── index.test.ts # Example test file
-├── tsdown.config.ts   # Configuration for tsdown (bundling)
-├── biome.json       # Biome linter/formatter configuration
-├── package.json     # Project metadata and scripts
-└── ... (other config files and GitHub workflows)
-```
-
-## License
-
-MIT – see [LICENSE](./LICENSE).

@@ -18,5 +18,7 @@
     "strict": true,
     "target": "ESNext",
     "verbatimModuleSyntax": true
-  }
+  },
+  "exclude": ["dist", "node_modules"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "tsdown.config.ts"]
 }
