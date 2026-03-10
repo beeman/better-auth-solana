@@ -1,0 +1,18 @@
+/tmp
+
+*.tsbuildinfo
+dist
+node_modules
+
+# START Ruler Generated Files
+/.gemini/settings.json
+/.gemini/settings.json.bak
+/.mcp.json
+/.mcp.json.bak
+/AGENTS.md
+/AGENTS.md.bak
+/CLAUDE.md
+/CLAUDE.md.bak
+/opencode.json
+/opencode.json.bak
+# END Ruler Generated Files

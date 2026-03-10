@@ -1,0 +1,24 @@
+name: Install Dependencies
+description: Sets up Bun, then installs all dependencies
+
+runs:
+  using: composite
+  steps:
+    - name: Install Node.js
+      uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6
+      with:
+        node-version: lts/krypton
+
+    - name: Install bun
+      uses: oven-sh/setup-bun@b7a1c7ccf290d58743029c4f6903da283811b979 # v2
+      with:
+        bun-version-file: '.bun-version'
+
+    - name: Install dependencies
+      shell: bash
+      run: bun install
+
+    # TODO: This check can go when this issue is fixed https://github.com/oven-sh/bun/issues/24223
+    - name: Check for dirty git repo
+      shell: bash
+      run: git diff --quiet --ignore-submodules HEAD
