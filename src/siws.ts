@@ -3,7 +3,6 @@ import type { SIWSNonceResponse } from './shared.ts'
 
 export interface ParsedSIWSMessage {
   address: string
-  chainId: string
   domain: string
   expirationTime: string
   issuedAt: string
@@ -14,7 +13,6 @@ export interface ParsedSIWSMessage {
 }
 
 const fieldSchema = z.object({
-  'Chain ID': z.string().min(1),
   'Expiration Time': z.string().min(1),
   'Issued At': z.string().min(1),
   Nonce: z.string().min(1),
@@ -24,7 +22,6 @@ const fieldSchema = z.object({
 
 export function formatSIWSMessage(input: {
   address: string
-  chainId: string
   domain: string
   expirationTime: string
   issuedAt: string
@@ -42,7 +39,6 @@ export function formatSIWSMessage(input: {
   lines.push(
     `URI: ${input.uri}`,
     `Version: ${input.version ?? '1'}`,
-    `Chain ID: ${input.chainId}`,
     `Nonce: ${input.nonce}`,
     `Issued At: ${input.issuedAt}`,
     `Expiration Time: ${input.expirationTime}`,
@@ -107,7 +103,6 @@ export function parseSIWSMessage(message: string): ParsedSIWSMessage {
 
   return {
     address,
-    chainId: parsedFields['Chain ID'],
     domain: headerMatch.groups.domain,
     expirationTime: parsedFields['Expiration Time'],
     issuedAt: parsedFields['Issued At'],
@@ -127,7 +122,6 @@ export function deserializeSIWSChallenge(serializedChallenge: string): SIWSNonce
 
   return z
     .object({
-      cluster: z.string().min(1),
       domain: z.string().min(1),
       expirationTime: z.string().datetime(),
       issuedAt: z.string().datetime(),

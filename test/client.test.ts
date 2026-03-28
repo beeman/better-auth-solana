@@ -20,10 +20,6 @@ test('exports the siws server, client, and schema entrypoints', () => {
           required: true,
           type: 'string',
         },
-        cluster: {
-          required: true,
-          type: 'string',
-        },
         createdAt: {
           required: true,
           type: 'date',
@@ -50,7 +46,6 @@ test('creates and parses SIWS message input from the issued challenge', () => {
   const signInInput = createSIWSInput({
     address: 'wallet-address',
     challenge: {
-      cluster: 'mainnet',
       domain: 'example.com',
       expirationTime: '2026-03-11T00:15:00.000Z',
       issuedAt: '2026-03-11T00:00:00.000Z',
@@ -61,7 +56,6 @@ test('creates and parses SIWS message input from the issued challenge', () => {
   })
   const message = formatSIWSMessage({
     address: signInInput.address,
-    chainId: signInInput.chainId,
     domain: signInInput.domain,
     expirationTime: signInInput.expirationTime,
     issuedAt: signInInput.issuedAt,
@@ -73,7 +67,6 @@ test('creates and parses SIWS message input from the issued challenge', () => {
 
   expect(signInInput).toEqual({
     address: 'wallet-address',
-    chainId: 'mainnet',
     domain: 'example.com',
     expirationTime: '2026-03-11T00:15:00.000Z',
     issuedAt: '2026-03-11T00:00:00.000Z',
@@ -84,7 +77,6 @@ test('creates and parses SIWS message input from the issued challenge', () => {
   })
   expect(parseSIWSMessage(message)).toEqual({
     address: 'wallet-address',
-    chainId: 'mainnet',
     domain: 'example.com',
     expirationTime: '2026-03-11T00:15:00.000Z',
     issuedAt: '2026-03-11T00:00:00.000Z',

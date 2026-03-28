@@ -2,7 +2,6 @@ import type { BetterAuthPlugin, InferOptionSchema } from 'better-auth'
 import type { VerifySolanaSignatureFn } from './verify-signature.ts'
 
 export interface SIWSNonceResponse {
-  cluster: string
   domain: string
   expirationTime: Date | string
   issuedAt: Date | string
@@ -25,7 +24,7 @@ export type SIWSPlugin = (options: SIWSOptions) => BetterAuthPlugin
 
 export type SIWSGetNonceFn = () => Promise<string>
 
-export type SIWSProfileLookupFn = (args: { cluster: string; walletAddress: string }) => Promise<
+export type SIWSProfileLookupFn = (args: { walletAddress: string }) => Promise<
   | {
       avatar?: string
       name?: string
@@ -37,7 +36,6 @@ export type SIWSProfileLookupFn = (args: { cluster: string; walletAddress: strin
 export interface SIWSLinkResponse {
   success: true
   user: {
-    cluster: string
     id: string
     walletAddress: string
   }
@@ -47,7 +45,6 @@ export interface SIWSVerifyResponse {
   success: true
   token: string
   user: {
-    cluster: string
     id: string
     walletAddress: string
   }
@@ -55,7 +52,6 @@ export interface SIWSVerifyResponse {
 
 export interface SIWSWalletRecord {
   address: string
-  cluster: string
   createdAt: Date | string
   isPrimary: boolean
   userId: string

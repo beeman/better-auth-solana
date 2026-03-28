@@ -19,13 +19,11 @@ import { deserializeSIWSChallenge, parseSIWSMessage, serializeSIWSChallenge } fr
 import {
   createSIWSWallet,
   findSIWSWalletByAddress,
-  findSIWSWalletByAddressAndCluster,
   findSIWSWalletByUserId,
   solanaWalletSchema,
 } from './solana-storage.ts'
 import { generateNonce, type VerifySolanaSignatureFn, verifySolanaSignature } from './verify-signature.ts'
 
-const defaultCluster = 'mainnet'
 const defaultNonceExpirationMs = 15 * 60 * 1000
 
 declare module '@better-auth/core' {
@@ -68,16 +66,15 @@ interface SIWSContext {
   internalAdapter: SIWSInternalAdapter
 }
 
-function buildSIWSUserResponse(args: { cluster: string; userId: string; walletAddress: string }) {
+function buildSIWSUserResponse(args: { userId: string; walletAddress: string }) {
   return {
-    cluster: args.cluster,
     id: args.userId,
     walletAddress: args.walletAddress,
   }
 }
 
-function buildAccountId(args: { cluster: string; walletAddress: string }) {
-  return `${args.walletAddress}:${args.cluster}`
+function buildAccountId(args: { walletAddress: string }) {
+  return args.walletAddress
 }
 
 function assertChallengeMatchesMessage(args: {
@@ -89,7 +86,6 @@ function assertChallengeMatchesMessage(args: {
 
   if (
     message.address !== walletAddress ||
-    message.chainId !== challenge.cluster ||
     message.domain !== challenge.domain ||
     message.expirationTime !== challenge.expirationTime ||
     message.issuedAt !== challenge.issuedAt ||
@@ -104,17 +100,15 @@ function assertChallengeMatchesMessage(args: {
 
 function buildChallenge(args: {
   baseURL?: string
-  cluster: string
   domain: string
   expiresAt: Date
   issuedAt: Date
   nonce: string
 }): SIWSNonceResponse {
-  const { baseURL, cluster, domain, expiresAt, issuedAt, nonce } = args
+  const { baseURL, domain, expiresAt, issuedAt, nonce } = args
   const uri = typeof baseURL === 'string' ? baseURL : `https://${domain}`
 
   return {
-    cluster,
     domain,
     expirationTime: expiresAt.toISOString(),
     issuedAt: issuedAt.toISOString(),
@@ -123,10 +117,8 @@ function buildChallenge(args: {
   }
 }
 
-function buildVerificationIdentifier(args: { cluster: string; walletAddress: string }) {
-  const { cluster, walletAddress } = args
-
-  return `siws:${walletAddress}:${cluster}`
+function buildVerificationIdentifier(args: { walletAddress: string }) {
+  return `siws:${args.walletAddress}`
 }
 
 function getFallbackEmailDomainName(args: { baseURL?: string; emailDomainName?: string }) {
@@ -145,14 +137,8 @@ function getFallbackEmailDomainName(args: { baseURL?: string; emailDomainName?: 
   }
 }
 
-async function ensureSIWSAccount(args: {
-  cluster: string
-  context: SIWSContext
-  userId: string
-  walletAddress: string
-}) {
+async function ensureSIWSAccount(args: { context: SIWSContext; userId: string; walletAddress: string }) {
   const accountId = buildAccountId({
-    cluster: args.cluster,
     walletAddress: args.walletAddress,
   })
   const existingAccount = await args.context.internalAdapter.findAccountByProviderId(accountId, 'siws')
@@ -188,15 +174,14 @@ async function getIsPrimaryWalletForUser(args: { adapter: SIWSAdapter | SIWSTran
 }
 
 async function validateSIWSRequest(args: {
-  cluster: string
   context: SIWSContext
   message: string
   signature: string
   verifySignature?: VerifySolanaSignatureFn
   walletAddress: string
 }) {
-  const { cluster, context, message, signature, verifySignature = verifySolanaSignature, walletAddress } = args
-  const identifier = buildVerificationIdentifier({ cluster, walletAddress })
+  const { context, message, signature, verifySignature = verifySolanaSignature, walletAddress } = args
+  const identifier = buildVerificationIdentifier({ walletAddress })
   const nonceRecord = await context.internalAdapter.findVerificationValue(identifier)
 
   if (!nonceRecord) {
@@ -249,15 +234,14 @@ async function validateSIWSRequest(args: {
 }
 
 export async function issueSIWSChallenge(args: {
-  cluster: string
   context: SIWSContext
   domain: string
   getNonce?: SIWSGetNonceFn
   nonceExpirationMs: number
   walletAddress: string
 }): Promise<SIWSNonceResponse> {
-  const { cluster, context, domain, getNonce, nonceExpirationMs, walletAddress } = args
-  const identifier = buildVerificationIdentifier({ cluster, walletAddress })
+  const { context, domain, getNonce, nonceExpirationMs, walletAddress } = args
+  const identifier = buildVerificationIdentifier({ walletAddress })
   const existingChallenge = await context.internalAdapter.findVerificationValue(identifier)
 
   if (existingChallenge) {
@@ -269,7 +253,6 @@ export async function issueSIWSChallenge(args: {
   const nonce = getNonce ? await getNonce() : generateNonce()
   const challenge = buildChallenge({
     baseURL: context.baseURL,
-    cluster,
     domain,
     expiresAt,
     issuedAt,
@@ -287,7 +270,6 @@ export async function issueSIWSChallenge(args: {
 
 export async function verifySIWSMessage(args: {
   anonymous: boolean
-  cluster: string
   context: SIWSContext
   email?: string
   emailDomainName?: string
@@ -299,7 +281,6 @@ export async function verifySIWSMessage(args: {
 }): Promise<SIWSVerifyResponse & { _session: SIWSStoredSession; _user: SIWSStoredUser }> {
   const {
     anonymous,
-    cluster,
     context,
     email,
     emailDomainName,
@@ -314,7 +295,6 @@ export async function verifySIWSMessage(args: {
     throw APIError.from('BAD_REQUEST', SIWS_ERROR_CODES.EMAIL_REQUIRED)
   }
   await validateSIWSRequest({
-    cluster,
     context,
     message,
     signature,
@@ -322,17 +302,10 @@ export async function verifySIWSMessage(args: {
     walletAddress,
   })
 
-  const existingWallet = await findSIWSWalletByAddressAndCluster({
+  const existingWallet = await findSIWSWalletByAddress({
     adapter: context.adapter,
     address: walletAddress,
-    cluster,
   })
-  const anyWallet = existingWallet
-    ? existingWallet
-    : await findSIWSWalletByAddress({
-        adapter: context.adapter,
-        address: walletAddress,
-      })
   let user: SIWSStoredUser | null = null
 
   if (existingWallet) {
@@ -341,20 +314,6 @@ export async function verifySIWSMessage(args: {
     if (!user) {
       throw APIError.from('INTERNAL_SERVER_ERROR', SIWS_ERROR_CODES.USER_NOT_FOUND_FOR_WALLET)
     }
-  } else if (anyWallet) {
-    user = await context.internalAdapter.findUserById(anyWallet.userId)
-
-    if (!user) {
-      throw APIError.from('INTERNAL_SERVER_ERROR', SIWS_ERROR_CODES.USER_NOT_FOUND_FOR_WALLET)
-    }
-
-    await createSIWSWallet({
-      adapter: context.adapter,
-      address: walletAddress,
-      cluster,
-      isPrimary: false,
-      userId: user.id,
-    })
   } else {
     const resolvedEmailDomainName = getFallbackEmailDomainName({
       baseURL: context.baseURL,
@@ -362,7 +321,6 @@ export async function verifySIWSMessage(args: {
     })
     const profile =
       (await profileLookup?.({
-        cluster,
         walletAddress,
       })) ?? null
     user = await context.internalAdapter.createUser({
@@ -374,14 +332,12 @@ export async function verifySIWSMessage(args: {
     await createSIWSWallet({
       adapter: context.adapter,
       address: walletAddress,
-      cluster,
       isPrimary: true,
       userId: user.id,
     })
   }
 
   await ensureSIWSAccount({
-    cluster,
     context,
     userId: user.id,
     walletAddress,
@@ -399,7 +355,6 @@ export async function verifySIWSMessage(args: {
     success: true,
     token: session.token,
     user: buildSIWSUserResponse({
-      cluster,
       userId: user.id,
       walletAddress,
     }),
@@ -407,7 +362,6 @@ export async function verifySIWSMessage(args: {
 }
 
 export async function linkSIWSWallet(args: {
-  cluster: string
   context: SIWSContext
   message: string
   signature: string
@@ -415,10 +369,9 @@ export async function linkSIWSWallet(args: {
   verifySignature?: VerifySolanaSignatureFn
   walletAddress: string
 }): Promise<SIWSLinkResponse> {
-  const { cluster, context, message, signature, userId, verifySignature, walletAddress } = args
+  const { context, message, signature, userId, verifySignature, walletAddress } = args
 
   await validateSIWSRequest({
-    cluster,
     context,
     message,
     signature,
@@ -428,10 +381,9 @@ export async function linkSIWSWallet(args: {
 
   return runWithTransaction(context.adapter, async () => {
     const adapter = await getCurrentAdapter(context.adapter)
-    const existingWallet = await findSIWSWalletByAddressAndCluster({
+    const existingWallet = await findSIWSWalletByAddress({
       adapter,
       address: walletAddress,
-      cluster,
     })
 
     if (existingWallet) {
@@ -440,7 +392,6 @@ export async function linkSIWSWallet(args: {
         wallet: existingWallet,
       })
       await ensureSIWSAccount({
-        cluster,
         context,
         userId,
         walletAddress,
@@ -449,23 +400,10 @@ export async function linkSIWSWallet(args: {
       return {
         success: true,
         user: buildSIWSUserResponse({
-          cluster,
           userId,
           walletAddress,
         }),
       }
-    }
-
-    const anyWallet = await findSIWSWalletByAddress({
-      adapter,
-      address: walletAddress,
-    })
-
-    if (anyWallet) {
-      ensureWalletCanBeLinkedToUser({
-        userId,
-        wallet: anyWallet,
-      })
     }
 
     const isPrimary = await getIsPrimaryWalletForUser({
@@ -476,12 +414,10 @@ export async function linkSIWSWallet(args: {
     await createSIWSWallet({
       adapter,
       address: walletAddress,
-      cluster,
       isPrimary,
       userId,
     })
     await ensureSIWSAccount({
-      cluster,
       context,
       userId,
       walletAddress,
@@ -490,7 +426,6 @@ export async function linkSIWSWallet(args: {
     return {
       success: true,
       user: buildSIWSUserResponse({
-        cluster,
         userId,
         walletAddress,
       }),
@@ -506,7 +441,6 @@ export const siws = (options: SIWSOptions) =>
         '/siws/link',
         {
           body: z.object({
-            cluster: z.string().min(1).optional().default(defaultCluster),
             message: z.string().min(1),
             signature: z.string().refine((value) => isSignature(value), {
               message: 'Invalid Solana signature',
@@ -521,7 +455,6 @@ export const siws = (options: SIWSOptions) =>
         },
         async (ctx) => {
           const response = await linkSIWSWallet({
-            cluster: ctx.body.cluster,
             context: ctx.context,
             message: ctx.body.message,
             signature: ctx.body.signature,
@@ -537,7 +470,6 @@ export const siws = (options: SIWSOptions) =>
         '/siws/nonce',
         {
           body: z.object({
-            cluster: z.string().min(1).optional().default(defaultCluster),
             walletAddress: z.string().refine((value) => isAddress(value), {
               message: 'Invalid Solana address',
             }),
@@ -546,7 +478,6 @@ export const siws = (options: SIWSOptions) =>
         },
         async (ctx) => {
           const challenge = await issueSIWSChallenge({
-            cluster: ctx.body.cluster,
             context: ctx.context,
             domain: options.domain,
             getNonce: options.getNonce,
@@ -561,7 +492,6 @@ export const siws = (options: SIWSOptions) =>
         '/siws/verify',
         {
           body: z.object({
-            cluster: z.string().min(1).optional().default(defaultCluster),
             email: z.email().optional(),
             message: z.string().min(1),
             signature: z.string().refine((value) => isSignature(value), {
@@ -577,7 +507,6 @@ export const siws = (options: SIWSOptions) =>
         async (ctx) => {
           const response = await verifySIWSMessage({
             anonymous: options.anonymous ?? true,
-            cluster: ctx.body.cluster,
             context: ctx.context,
             email: ctx.body.email,
             emailDomainName: options.emailDomainName,
