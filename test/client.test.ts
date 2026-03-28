@@ -8,6 +8,7 @@ test('exports the siws server, client, and schema entrypoints', () => {
   expect(typeof siws).toBe('function')
   expect(typeof siwsClient).toBe('function')
   expect(SIWS_ERROR_CODES.INVALID_SIGNATURE.code).toBe('INVALID_SIGNATURE')
+  expect(SIWS_ERROR_CODES.WALLET_ALREADY_LINKED_TO_ANOTHER_USER.code).toBe('WALLET_ALREADY_LINKED_TO_ANOTHER_USER')
   expect(siwsClient()).toMatchObject({
     $ERROR_CODES: SIWS_ERROR_CODES,
     id: 'siws',
@@ -26,6 +27,10 @@ test('exports the siws server, client, and schema entrypoints', () => {
         createdAt: {
           required: true,
           type: 'date',
+        },
+        isPrimary: {
+          defaultValue: false,
+          type: 'boolean',
         },
         userId: {
           index: true,

@@ -34,8 +34,11 @@ export const auth = betterAuth({
 
 The plugin adds these Better Auth endpoints:
 
+- `POST /siws/link`
 - `POST /siws/nonce`
 - `POST /siws/verify`
+
+`POST /siws/link` accepts `{ walletAddress, message, signature, cluster? }`, requires an authenticated Better Auth session, verifies the signed SIWS payload, persists a `solanaWallet` row when needed, persists an `account` row with `providerId: "siws"` when needed, and keeps the current session intact.
 
 `POST /siws/nonce` accepts `{ walletAddress, cluster? }` and stores a cluster-bound challenge in Better Auth verification storage under `siws:<walletAddress>:<cluster>`.
 
@@ -93,9 +96,12 @@ The default `solanaWallet` model contains:
 - `address`
 - `cluster`
 - `createdAt`
+- `isPrimary`
 - `userId`
 
 The plugin stores one wallet row per `address + cluster`, but reuses the same Better Auth user when the same address signs in on another cluster.
+
+The first Solana wallet row created for a user is marked `isPrimary: true`. Additional Solana wallet rows for that user are marked `isPrimary: false`.
 
 ## Options
 
@@ -104,19 +110,41 @@ The plugin stores one wallet row per `address + cluster`, but reuses the same Be
 - `anonymous` default `true`
 - `domain` required
 - `emailDomainName` optional
+- `getNonce` optional async override for SIWS nonce generation
 - `nonceExpirationMs` default `900000`
+- `profileLookup` optional async lookup for user `name` and `image` when SIWS creates a brand-new user
 - `schema` optional Better Auth schema field overrides for `solanaWallet`
+- `verifySignature` optional async override for SIWS signature verification
 
 When `anonymous` is `false`, `email` is required on `/siws/verify`.
 
 When `emailDomainName` is omitted, generated fallback emails use the Better Auth base URL host.
 
+When `profileLookup` is provided, it is only used when SIWS creates a brand-new Better Auth user. Existing users are not updated on later sign-ins or links.
+
 ## Notes
 
 - The account id format is `<walletAddress>:<cluster>`.
 - The account provider id is `siws`.
-- The client surface is `authClient.siws.nonce(...)` and `authClient.siws.verify(...)`.
+- The client surface is `authClient.siws.link(...)`, `authClient.siws.nonce(...)`, and `authClient.siws.verify(...)`.
+- Better Auth's `last-login-method` plugin currently recognizes `siwe`, not `siws`. If you use it with this plugin, add a `customResolveMethod` that maps `/siws/verify` to `siws`.
 - The package name is `better-auth-solana`; the plugin namespace is `siws`.
+
+Example `last-login-method` resolver:
+
+```ts
+import { lastLoginMethod } from 'better-auth/plugins'
+
+lastLoginMethod({
+  customResolveMethod(ctx) {
+    if (ctx.path === '/siws/verify') {
+      return 'siws'
+    }
+
+    return null
+  },
+})
+```
 
 ## Development
 

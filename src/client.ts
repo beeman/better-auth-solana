@@ -1,6 +1,6 @@
 import type { BetterAuthClientPlugin } from 'better-auth/client'
 import { SIWS_ERROR_CODES } from './error-codes.ts'
-import type { SIWSNonceResponse, SIWSVerifyResponse } from './shared.ts'
+import type { SIWSLinkResponse, SIWSNonceResponse, SIWSVerifyResponse } from './shared.ts'
 
 type SIWSServerPlugin = ReturnType<typeof import('./solana-auth.ts')['siws']>
 
@@ -55,4 +55,4 @@ export function siwsClient() {
 }
 
 export { SIWS_ERROR_CODES }
-export type { SIWSNonceResponse, SIWSVerifyResponse }
+export type { SIWSLinkResponse, SIWSNonceResponse, SIWSVerifyResponse }
