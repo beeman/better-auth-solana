@@ -12,10 +12,6 @@ export const solanaWalletSchema = {
         required: true,
         type: 'string',
       },
-      cluster: {
-        required: true,
-        type: 'string',
-      },
       createdAt: {
         required: true,
         type: 'date',
@@ -39,7 +35,6 @@ export const solanaWalletSchema = {
 
 const solanaWalletRecordSchema = z.object({
   address: z.string().min(1),
-  cluster: z.string().min(1),
   createdAt: z.union([z.date(), z.string().datetime()]),
   isPrimary: z.boolean().optional().default(false),
   userId: z.string().min(1),
@@ -56,14 +51,12 @@ export function parseSIWSWalletRecord(value: unknown): SIWSWalletRecord | null {
 export async function createSIWSWallet(args: {
   adapter: SIWSAdapter
   address: string
-  cluster: string
   isPrimary: boolean
   userId: string
 }) {
   const wallet = await args.adapter.create({
     data: {
       address: args.address,
-      cluster: args.cluster,
       createdAt: new Date(),
       isPrimary: args.isPrimary,
       userId: args.userId,
@@ -83,22 +76,6 @@ export async function findSIWSWalletByAddress(args: { adapter: SIWSAdapter; addr
   const wallet = await args.adapter.findOne({
     model: solanaWalletModelName,
     where: [{ field: 'address', operator: 'eq', value: args.address }],
-  })
-
-  return parseSIWSWalletRecord(wallet)
-}
-
-export async function findSIWSWalletByAddressAndCluster(args: {
-  adapter: SIWSAdapter
-  address: string
-  cluster: string
-}) {
-  const wallet = await args.adapter.findOne({
-    model: solanaWalletModelName,
-    where: [
-      { field: 'address', operator: 'eq', value: args.address },
-      { field: 'cluster', operator: 'eq', value: args.cluster },
-    ],
   })
 
   return parseSIWSWalletRecord(wallet)

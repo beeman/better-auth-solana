@@ -12,7 +12,6 @@ export interface CreateSIWSInputOptions {
 
 export interface SIWSInput {
   address: string
-  chainId: string
   domain: string
   expirationTime: string
   issuedAt: string
@@ -29,7 +28,6 @@ function normalizeDateString(value: Date | string) {
 export function createSIWSInput({ address, challenge, statement }: CreateSIWSInputOptions): SIWSInput {
   return {
     address,
-    chainId: challenge.cluster,
     domain: challenge.domain,
     expirationTime: normalizeDateString(challenge.expirationTime),
     issuedAt: normalizeDateString(challenge.issuedAt),

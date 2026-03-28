@@ -34,19 +34,17 @@ interface SIWSTestClient {
     data?: Record<string, unknown> | null
   }>
   siws: {
-    link(args: { cluster?: string; message: string; signature: string; walletAddress: string }): Promise<{
+    link(args: { message: string; signature: string; walletAddress: string }): Promise<{
       data?: {
         success: true
         user: {
-          cluster: string
           id: string
           walletAddress: string
         }
       } | null
     }>
-    nonce(args: { cluster?: string; walletAddress: string }): Promise<{
+    nonce(args: { walletAddress: string }): Promise<{
       data?: {
-        cluster: string
         domain: string
         expirationTime: string
         issuedAt: string
@@ -54,18 +52,11 @@ interface SIWSTestClient {
         uri: string
       } | null
     }>
-    verify(args: {
-      cluster?: string
-      email?: string
-      message: string
-      signature: string
-      walletAddress: string
-    }): Promise<{
+    verify(args: { email?: string; message: string; signature: string; walletAddress: string }): Promise<{
       data?: {
         success: true
         token: string
         user: {
-          cluster: string
           id: string
           walletAddress: string
         }
@@ -80,7 +71,6 @@ interface MemoryDB {
 
 interface SolanaWalletRow {
   address: string
-  cluster: string
   isPrimary: boolean
   userId: string
 }
@@ -211,7 +201,6 @@ function getRows<T>(db: MemoryDB, model: string) {
 function createMessage(args: {
   address: string
   challenge: {
-    cluster: string
     domain: string
     expirationTime: string
     issuedAt: string
@@ -228,7 +217,6 @@ function createMessage(args: {
 
   return formatSIWSMessage({
     address: signInInput.address,
-    chainId: signInInput.chainId,
     domain: signInInput.domain,
     expirationTime: signInInput.expirationTime,
     issuedAt: signInInput.issuedAt,
@@ -264,15 +252,12 @@ async function signMessage(args: {
 
 async function signIn(args: {
   authClient: SIWSTestClient
-  cluster?: string
   email?: string
   signer?: Awaited<ReturnType<typeof generateKeyPairSigner>>
 }) {
-  const cluster = args.cluster ?? 'mainnet'
   const signer = args.signer ?? (await generateKeyPairSigner())
   const address = signer.address
   const nonceResult = await args.authClient.siws.nonce({
-    cluster,
     walletAddress: address,
   })
 
@@ -290,7 +275,6 @@ async function signIn(args: {
     signer,
   })
   const verifyResult = await args.authClient.siws.verify({
-    cluster,
     email: args.email,
     message,
     signature,
@@ -303,7 +287,6 @@ async function signIn(args: {
 
   return {
     address,
-    cluster,
     verifyResult: verifyResult.data,
   }
 }
@@ -341,14 +324,11 @@ async function createSignedInEmailUser(args: {
 
 async function linkWallet(args: {
   authClient: SIWSTestClient
-  cluster?: string
   signer?: Awaited<ReturnType<typeof generateKeyPairSigner>>
 }) {
-  const cluster = args.cluster ?? 'mainnet'
   const signer = args.signer ?? (await generateKeyPairSigner())
   const address = signer.address
   const nonceResult = await args.authClient.siws.nonce({
-    cluster,
     walletAddress: address,
   })
 
@@ -366,7 +346,6 @@ async function linkWallet(args: {
     signer,
   })
   const linkResult = await args.authClient.siws.link({
-    cluster,
     message,
     signature,
     walletAddress: address,
@@ -378,7 +357,6 @@ async function linkWallet(args: {
 
   return {
     address,
-    cluster,
     linkResult: linkResult.data,
   }
 }
@@ -418,7 +396,6 @@ test('uses the configured getNonce hook for nonce issuance', async () => {
   })
   const signer = await generateKeyPairSigner()
   const nonceResult = await harness.authClient.siws.nonce({
-    cluster: 'mainnet',
     walletAddress: signer.address,
   })
 
@@ -442,7 +419,6 @@ test('uses the configured verifySignature hook for verify', async () => {
   const signer = await generateKeyPairSigner()
   const invalidSignatureSigner = await generateKeyPairSigner()
   const nonceResult = await harness.authClient.siws.nonce({
-    cluster: 'mainnet',
     walletAddress: signer.address,
   })
 
@@ -460,7 +436,6 @@ test('uses the configured verifySignature hook for verify', async () => {
     signer: invalidSignatureSigner,
   })
   const verifyResult = await harness.authClient.siws.verify({
-    cluster: 'mainnet',
     message,
     signature,
     walletAddress: signer.address,
@@ -497,7 +472,6 @@ test('uses the configured verifySignature hook for link', async () => {
   })
 
   const nonceResult = await harness.authClient.siws.nonce({
-    cluster: 'mainnet',
     walletAddress: signer.address,
   })
 
@@ -515,7 +489,6 @@ test('uses the configured verifySignature hook for link', async () => {
     signer: invalidSignatureSigner,
   })
   const linkResult = await harness.authClient.siws.link({
-    cluster: 'mainnet',
     message,
     signature,
     walletAddress: signer.address,
@@ -545,7 +518,6 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
   const createdAccounts: Array<Record<string, unknown>> = []
   const now = new Date()
   const challenge = {
-    cluster: 'mainnet',
     domain: 'example.com',
     expirationTime: new Date(now.getTime() + 60_000).toISOString(),
     issuedAt: now.toISOString(),
@@ -586,7 +558,6 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
   }
 
   const result = await linkSIWSWallet({
-    cluster: 'mainnet',
     context: {
       adapter: baseAdapter as never,
       baseURL: 'https://example.com/api/auth',
@@ -627,7 +598,6 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
   expect(result).toEqual({
     success: true,
     user: {
-      cluster: 'mainnet',
       id: 'user-1',
       walletAddress: address,
     },
@@ -636,42 +606,40 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
   expect(adapterCalls).not.toContain('base:create:solanaWallet')
   expect(adapterCalls).not.toContain('base:findOne:solanaWallet')
   expect(adapterCalls.filter((value) => value === 'transaction:create:solanaWallet')).toHaveLength(1)
-  expect(adapterCalls.filter((value) => value === 'transaction:findOne:solanaWallet')).toHaveLength(3)
+  expect(adapterCalls.filter((value) => value === 'transaction:findOne:solanaWallet')).toHaveLength(2)
   expect(createdAccounts).toEqual([
     expect.objectContaining({
-      accountId: `${address}:mainnet`,
+      accountId: address,
       providerId: 'siws',
       userId: 'user-1',
     }),
   ])
-  expect(deletedIdentifiers).toEqual([`siws:${address}:mainnet`])
+  expect(deletedIdentifiers).toEqual([`siws:${address}`])
 })
-
 test('authClient.siws.nonce and verify create a native Better Auth session, wallet, and account', async () => {
   const harness = await createHarness()
   const signInResult = await signIn({
     authClient: harness.authClient,
   })
   const account = getRows<AccountRow>(harness.db, 'account').find(
-    (value) => value.accountId === `${signInResult.address}:${signInResult.cluster}` && value.providerId === 'siws',
+    (value) => value.accountId === signInResult.address && value.providerId === 'siws',
   )
   const sessionResult = await harness.authClient.getSession()
   const user = getRows<UserRow>(harness.db, 'user').find((value) => value.id === signInResult.verifyResult.user.id)
   const wallet = getRows<SolanaWalletRow>(harness.db, 'solanaWallet').find(
-    (value) => value.address === signInResult.address && value.cluster === signInResult.cluster,
+    (value) => value.address === signInResult.address,
   )
 
   expect(signInResult.verifyResult).toEqual({
     success: true,
     token: expect.any(String),
     user: {
-      cluster: 'mainnet',
       id: expect.any(String),
       walletAddress: signInResult.address,
     },
   })
   expect(account).toMatchObject({
-    accountId: `${signInResult.address}:${signInResult.cluster}`,
+    accountId: signInResult.address,
     providerId: 'siws',
     userId: signInResult.verifyResult.user.id,
   })
@@ -683,13 +651,12 @@ test('authClient.siws.nonce and verify create a native Better Auth session, wall
   })
   expect(wallet).toMatchObject({
     address: signInResult.address,
-    cluster: signInResult.cluster,
     isPrimary: true,
     userId: signInResult.verifyResult.user.id,
   })
 })
 
-test('re-signing the same address and cluster reuses the same user and does not duplicate wallet or account rows', async () => {
+test('re-signing the same address reuses the same user and does not duplicate wallet or account rows', async () => {
   const harness = await createHarness()
   const signer = await generateKeyPairSigner()
   const firstResult = await signIn({
@@ -710,45 +677,6 @@ test('re-signing the same address and cluster reuses the same user and does not 
   expect(secondResult.verifyResult.user.id).toBe(firstResult.verifyResult.user.id)
   expect(accounts).toHaveLength(1)
   expect(wallets).toHaveLength(1)
-})
-
-test('signing the same address on a different cluster reuses the same user and creates another wallet and account row', async () => {
-  const harness = await createHarness()
-  const signer = await generateKeyPairSigner()
-  const mainnetResult = await signIn({
-    authClient: harness.authClient,
-    cluster: 'mainnet',
-    signer,
-  })
-  const devnetResult = await signIn({
-    authClient: harness.authClient,
-    cluster: 'devnet',
-    signer,
-  })
-  const accounts = getRows<AccountRow>(harness.db, 'account').filter(
-    (value) => value.providerId === 'siws' && value.userId === mainnetResult.verifyResult.user.id,
-  )
-  const wallets = getRows<SolanaWalletRow>(harness.db, 'solanaWallet').filter(
-    (value) => value.userId === mainnetResult.verifyResult.user.id,
-  )
-
-  expect(devnetResult.verifyResult.user.id).toBe(mainnetResult.verifyResult.user.id)
-  expect(accounts).toHaveLength(2)
-  expect(wallets).toHaveLength(2)
-  expect(accounts.map((account) => account.accountId).sort()).toEqual([
-    `${mainnetResult.address}:devnet`,
-    `${mainnetResult.address}:mainnet`,
-  ])
-  expect(wallets.toSorted((left, right) => left.cluster.localeCompare(right.cluster))).toEqual([
-    expect.objectContaining({
-      cluster: 'devnet',
-      isPrimary: false,
-    }),
-    expect.objectContaining({
-      cluster: 'mainnet',
-      isPrimary: true,
-    }),
-  ])
 })
 
 test('authClient.siws.link links a wallet to the current authenticated user without replacing the session', async () => {
@@ -776,14 +704,13 @@ test('authClient.siws.link links a wallet to the current authenticated user with
   expect(linkResult.linkResult).toEqual({
     success: true,
     user: {
-      cluster: 'mainnet',
       id: linkedUserId,
       walletAddress: linkResult.address,
     },
   })
   expect(accounts).toEqual([
     expect.objectContaining({
-      accountId: `${linkResult.address}:mainnet`,
+      accountId: linkResult.address,
       providerId: 'siws',
       userId: linkedUserId,
     }),
@@ -793,14 +720,13 @@ test('authClient.siws.link links a wallet to the current authenticated user with
   expect(wallets).toEqual([
     expect.objectContaining({
       address: linkResult.address,
-      cluster: 'mainnet',
       isPrimary: true,
       userId: linkedUserId,
     }),
   ])
 })
 
-test('re-linking the same address and cluster for the current user is a no-op', async () => {
+test('re-linking the same address for the current user is a no-op', async () => {
   const harness = await createHarness()
   const signer = await generateKeyPairSigner()
 
@@ -824,46 +750,6 @@ test('re-linking the same address and cluster for the current user is a no-op', 
   expect(wallets).toHaveLength(1)
 })
 
-test('linking the same address on another cluster for the current user creates another wallet and account row', async () => {
-  const harness = await createHarness()
-  const signer = await generateKeyPairSigner()
-
-  await createSignedInEmailUser({
-    authClient: harness.authClient,
-  })
-
-  const mainnetLink = await linkWallet({
-    authClient: harness.authClient,
-    cluster: 'mainnet',
-    signer,
-  })
-  const devnetLink = await linkWallet({
-    authClient: harness.authClient,
-    cluster: 'devnet',
-    signer,
-  })
-  const accounts = getRows<AccountRow>(harness.db, 'account').filter((value) => value.providerId === 'siws')
-  const wallets = getRows<SolanaWalletRow>(harness.db, 'solanaWallet')
-
-  expect(devnetLink.linkResult.user.id).toBe(mainnetLink.linkResult.user.id)
-  expect(accounts).toHaveLength(2)
-  expect(wallets).toHaveLength(2)
-  expect(accounts.map((account) => account.accountId).sort()).toEqual([
-    `${mainnetLink.address}:devnet`,
-    `${mainnetLink.address}:mainnet`,
-  ])
-  expect(wallets.toSorted((left, right) => left.cluster.localeCompare(right.cluster))).toEqual([
-    expect.objectContaining({
-      cluster: 'devnet',
-      isPrimary: false,
-    }),
-    expect.objectContaining({
-      cluster: 'mainnet',
-      isPrimary: true,
-    }),
-  ])
-})
-
 test('linking rejects wallets that already belong to another user', async () => {
   const harness = await createHarness()
   const secondClient = harness.createClient()
@@ -881,7 +767,6 @@ test('linking rejects wallets that already belong to another user', async () => 
   })
 
   const nonceResult = await secondClient.authClient.siws.nonce({
-    cluster: 'mainnet',
     walletAddress: signer.address,
   })
 
@@ -900,7 +785,6 @@ test('linking rejects wallets that already belong to another user', async () => 
   })
   const { data, response } = await postJSON({
     body: {
-      cluster: 'mainnet',
       message,
       signature,
       walletAddress: signer.address,
@@ -919,7 +803,6 @@ test('returns a stable error code when email is missing and anonymous mode is di
   })
   const signer = await generateKeyPairSigner()
   const nonceResult = await harness.authClient.siws.nonce({
-    cluster: 'mainnet',
     walletAddress: signer.address,
   })
 
@@ -938,7 +821,6 @@ test('returns a stable error code when email is missing and anonymous mode is di
   })
   const { data, response } = await postJSON({
     body: {
-      cluster: 'mainnet',
       message,
       signature,
       walletAddress: signer.address,
@@ -956,7 +838,6 @@ test('returns a stable error code when the nonce is invalid or expired', async (
   const signer = await generateKeyPairSigner()
   const invalidNonceMessage = formatSIWSMessage({
     address: signer.address,
-    chainId: 'mainnet',
     domain: 'example.com',
     expirationTime: '2026-03-11T00:15:00.000Z',
     issuedAt: '2026-03-11T00:00:00.000Z',
@@ -972,7 +853,6 @@ test('returns a stable error code when the nonce is invalid or expired', async (
   })
   const invalidNonceResult = await postJSON({
     body: {
-      cluster: 'mainnet',
       message: invalidNonceMessage,
       signature: invalidNonceSignature,
       walletAddress: signer.address,
@@ -981,7 +861,6 @@ test('returns a stable error code when the nonce is invalid or expired', async (
     path: '/siws/verify',
   })
   const nonceResult = await harness.authClient.siws.nonce({
-    cluster: 'mainnet',
     walletAddress: signer.address,
   })
 
@@ -989,7 +868,7 @@ test('returns a stable error code when the nonce is invalid or expired', async (
     throw new Error('Expected SIWS nonce response')
   }
 
-  const identifier = `siws:${signer.address}:mainnet`
+  const identifier = `siws:${signer.address}`
   const message = createMessage({
     address: signer.address,
     challenge: nonceResult.data,
@@ -1012,7 +891,6 @@ test('returns a stable error code when the nonce is invalid or expired', async (
 
   const expiredNonceResult = await postJSON({
     body: {
-      cluster: 'mainnet',
       message,
       signature,
       walletAddress: signer.address,
@@ -1031,7 +909,6 @@ test('returns stable error codes for mismatched messages and invalid signatures'
   const harness = await createHarness()
   const signer = await generateKeyPairSigner()
   const nonceResult = await harness.authClient.siws.nonce({
-    cluster: 'mainnet',
     walletAddress: signer.address,
   })
 
@@ -1053,7 +930,6 @@ test('returns stable error codes for mismatched messages and invalid signatures'
   })
   const mismatchedResult = await postJSON({
     body: {
-      cluster: 'mainnet',
       message: mismatchedMessage,
       signature: mismatchedSignature,
       walletAddress: signer.address,
@@ -1073,7 +949,6 @@ test('returns stable error codes for mismatched messages and invalid signatures'
   })
   const invalidSignatureResult = await postJSON({
     body: {
-      cluster: 'mainnet',
       message: validMessage,
       signature: invalidSignature,
       walletAddress: signer.address,
@@ -1102,31 +977,29 @@ test('uses profileLookup only when creating a brand-new SIWS user', async () => 
   let callCount = 0
   const signer = await generateKeyPairSigner()
   const harness = await createHarness({
-    profileLookup: async ({ cluster }) => {
+    profileLookup: async ({ walletAddress }) => {
       callCount += 1
 
       return {
         avatar: 'https://example.com/avatar.png',
-        name: `Wallet ${cluster}`,
+        name: `Wallet ${walletAddress}`,
       }
     },
   })
-  const mainnetResult = await signIn({
+  const firstResult = await signIn({
     authClient: harness.authClient,
-    cluster: 'mainnet',
     signer,
   })
-  const devnetResult = await signIn({
+  const secondResult = await signIn({
     authClient: harness.authClient,
-    cluster: 'devnet',
     signer,
   })
-  const user = getRows<UserRow>(harness.db, 'user').find((value) => value.id === mainnetResult.verifyResult.user.id)
+  const user = getRows<UserRow>(harness.db, 'user').find((value) => value.id === firstResult.verifyResult.user.id)
 
   expect(callCount).toBe(1)
-  expect(devnetResult.verifyResult.user.id).toBe(mainnetResult.verifyResult.user.id)
+  expect(secondResult.verifyResult.user.id).toBe(firstResult.verifyResult.user.id)
   expect(user).toMatchObject({
     image: 'https://example.com/avatar.png',
-    name: 'Wallet mainnet',
+    name: `Wallet ${signer.address}`,
   })
 })

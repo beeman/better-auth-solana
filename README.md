@@ -38,11 +38,11 @@ The plugin adds these Better Auth endpoints:
 - `POST /siws/nonce`
 - `POST /siws/verify`
 
-`POST /siws/link` accepts `{ walletAddress, message, signature, cluster? }`, requires an authenticated Better Auth session, verifies the signed SIWS payload, persists a `solanaWallet` row when needed, persists an `account` row with `providerId: "siws"` when needed, and keeps the current session intact.
+`POST /siws/link` accepts `{ walletAddress, message, signature }`, requires an authenticated Better Auth session, verifies the signed SIWS payload, persists a `solanaWallet` row when needed, persists an `account` row with `providerId: "siws"` when needed, and keeps the current session intact.
 
-`POST /siws/nonce` accepts `{ walletAddress, cluster? }` and stores a cluster-bound challenge in Better Auth verification storage under `siws:<walletAddress>:<cluster>`.
+`POST /siws/nonce` accepts `{ walletAddress }` and stores a challenge in Better Auth verification storage under `siws:<walletAddress>`.
 
-`POST /siws/verify` accepts `{ walletAddress, message, signature, cluster?, email? }`, verifies the signed SIWS payload, creates or reuses the Better Auth user, persists a `solanaWallet` row, persists an `account` row with `providerId: "siws"`, and establishes the Better Auth session with native session cookies.
+`POST /siws/verify` accepts `{ walletAddress, message, signature, email? }`, verifies the signed SIWS payload, creates or reuses the Better Auth user, persists a `solanaWallet` row, persists an `account` row with `providerId: "siws"`, and establishes the Better Auth session with native session cookies.
 
 ## Client
 
@@ -57,7 +57,6 @@ const authClient = createAuthClient({
 })
 
 const nonceResult = await authClient.siws.nonce({
-  cluster: 'mainnet',
   walletAddress: address,
 })
 
@@ -74,7 +73,6 @@ const siwsInput = createSIWSInput({
 const signed = await signWithYourWallet(siwsInput)
 
 await authClient.siws.verify({
-  cluster: 'mainnet',
   message: signed.message,
   signature: signed.signature,
   walletAddress: address,
@@ -83,7 +81,7 @@ await authClient.siws.verify({
 const session = await authClient.getSession()
 ```
 
-The server validates the signed message against the issued `domain`, `uri`, `chainId`, `nonce`, `issuedAt`, and `expirationTime`. The `statement` remains client-controlled.
+The server validates the signed message against the issued `domain`, `uri`, `nonce`, `issuedAt`, and `expirationTime`. The `statement` remains client-controlled.
 
 ## Default Schema
 
@@ -94,12 +92,11 @@ import { solanaWalletSchema } from 'better-auth-solana/schema'
 The default `solanaWallet` model contains:
 
 - `address`
-- `cluster`
 - `createdAt`
 - `isPrimary`
 - `userId`
 
-The plugin stores one wallet row per `address + cluster`, but reuses the same Better Auth user when the same address signs in on another cluster.
+The plugin stores one wallet row per address and one SIWS account row per wallet address.
 
 The first Solana wallet row created for a user is marked `isPrimary: true`. Additional Solana wallet rows for that user are marked `isPrimary: false`.
 
@@ -124,7 +121,7 @@ When `profileLookup` is provided, it is only used when SIWS creates a brand-new 
 
 ## Notes
 
-- The account id format is `<walletAddress>:<cluster>`.
+- The account id format is `<walletAddress>`.
 - The account provider id is `siws`.
 - The client surface is `authClient.siws.link(...)`, `authClient.siws.nonce(...)`, and `authClient.siws.verify(...)`.
 - Better Auth's `last-login-method` plugin currently recognizes `siwe`, not `siws`. If you use it with this plugin, add a `customResolveMethod` that maps `/siws/verify` to `siws`.
