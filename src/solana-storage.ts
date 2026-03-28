@@ -1,3 +1,4 @@
+import type { DBAdapter } from '@better-auth/core/db/adapter'
 import type { BetterAuthPluginDBSchema } from 'better-auth/db'
 import { z } from 'zod'
 import type { SIWSWalletRecord } from './shared.ts'
@@ -19,6 +20,10 @@ export const solanaWalletSchema = {
         required: true,
         type: 'date',
       },
+      isPrimary: {
+        defaultValue: false,
+        type: 'boolean',
+      },
       userId: {
         index: true,
         references: {
@@ -36,20 +41,11 @@ const solanaWalletRecordSchema = z.object({
   address: z.string().min(1),
   cluster: z.string().min(1),
   createdAt: z.union([z.date(), z.string().datetime()]),
+  isPrimary: z.boolean().optional().default(false),
   userId: z.string().min(1),
 })
 
-interface SIWSAdapter {
-  create(args: { data: Record<string, unknown>; model: string }): Promise<unknown>
-  findOne(args: {
-    model: string
-    where: Array<{
-      field: string
-      operator: 'eq'
-      value: boolean | Date | null | number | number[] | string | string[]
-    }>
-  }): Promise<unknown>
-}
+type SIWSAdapter = Pick<DBAdapter, 'create' | 'findOne'>
 
 export function parseSIWSWalletRecord(value: unknown): SIWSWalletRecord | null {
   const result = solanaWalletRecordSchema.safeParse(value)
@@ -61,6 +57,7 @@ export async function createSIWSWallet(args: {
   adapter: SIWSAdapter
   address: string
   cluster: string
+  isPrimary: boolean
   userId: string
 }) {
   const wallet = await args.adapter.create({
@@ -68,6 +65,7 @@ export async function createSIWSWallet(args: {
       address: args.address,
       cluster: args.cluster,
       createdAt: new Date(),
+      isPrimary: args.isPrimary,
       userId: args.userId,
     },
     model: solanaWalletModelName,
@@ -101,6 +99,15 @@ export async function findSIWSWalletByAddressAndCluster(args: {
       { field: 'address', operator: 'eq', value: args.address },
       { field: 'cluster', operator: 'eq', value: args.cluster },
     ],
+  })
+
+  return parseSIWSWalletRecord(wallet)
+}
+
+export async function findSIWSWalletByUserId(args: { adapter: SIWSAdapter; userId: string }) {
+  const wallet = await args.adapter.findOne({
+    model: solanaWalletModelName,
+    where: [{ field: 'userId', operator: 'eq', value: args.userId }],
   })
 
   return parseSIWSWalletRecord(wallet)

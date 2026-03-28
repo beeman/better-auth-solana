@@ -8,4 +8,5 @@ export const SIWS_ERROR_CODES = defineErrorCodes({
   INVALID_SIGNATURE: 'Invalid signature.',
   MESSAGE_MISMATCH: 'Message does not match the issued challenge.',
   USER_NOT_FOUND_FOR_WALLET: 'User not found for wallet.',
+  WALLET_ALREADY_LINKED_TO_ANOTHER_USER: 'Wallet is already linked to another user.',
 })
