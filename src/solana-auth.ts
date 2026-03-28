@@ -104,16 +104,17 @@ function buildChallenge(args: {
   expiresAt: Date
   issuedAt: Date
   nonce: string
+  uri?: string
 }): SIWSNonceResponse {
-  const { baseURL, domain, expiresAt, issuedAt, nonce } = args
-  const uri = typeof baseURL === 'string' ? baseURL : `https://${domain}`
+  const { baseURL, domain, expiresAt, issuedAt, nonce, uri } = args
+  const resolvedURI = uri || baseURL || `https://${domain}`
 
   return {
     domain,
     expirationTime: expiresAt.toISOString(),
     issuedAt: issuedAt.toISOString(),
     nonce,
-    uri,
+    uri: resolvedURI,
   }
 }
 
@@ -238,9 +239,10 @@ export async function issueSIWSChallenge(args: {
   domain: string
   getNonce?: SIWSGetNonceFn
   nonceExpirationMs: number
+  uri?: string
   walletAddress: string
 }): Promise<SIWSNonceResponse> {
-  const { context, domain, getNonce, nonceExpirationMs, walletAddress } = args
+  const { context, domain, getNonce, nonceExpirationMs, uri, walletAddress } = args
   const identifier = buildVerificationIdentifier({ walletAddress })
   const existingChallenge = await context.internalAdapter.findVerificationValue(identifier)
 
@@ -257,6 +259,7 @@ export async function issueSIWSChallenge(args: {
     expiresAt,
     issuedAt,
     nonce,
+    uri,
   })
 
   await context.internalAdapter.createVerificationValue({
@@ -482,6 +485,7 @@ export const siws = (options: SIWSOptions) =>
             domain: options.domain,
             getNonce: options.getNonce,
             nonceExpirationMs: options.nonceExpirationMs ?? defaultNonceExpirationMs,
+            uri: options.uri,
             walletAddress: ctx.body.walletAddress,
           })
 
