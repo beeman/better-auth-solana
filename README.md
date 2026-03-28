@@ -111,6 +111,7 @@ The first Solana wallet row created for a user is marked `isPrimary: true`. Addi
 - `nonceExpirationMs` default `900000`
 - `profileLookup` optional async lookup for user `name` and `image` when SIWS creates a brand-new user
 - `schema` optional Better Auth schema field overrides for `solanaWallet`
+- `uri` optional override for the SIWS challenge `uri`
 - `verifySignature` optional async override for SIWS signature verification
 
 When `anonymous` is `false`, `email` is required on `/siws/verify`.
@@ -118,6 +119,8 @@ When `anonymous` is `false`, `email` is required on `/siws/verify`.
 When `emailDomainName` is omitted, generated fallback emails use the Better Auth base URL host.
 
 When `profileLookup` is provided, it is only used when SIWS creates a brand-new Better Auth user. Existing users are not updated on later sign-ins or links.
+
+When `uri` is a non-empty string, issued challenges use it verbatim. Otherwise SIWS uses Better Auth's resolved base URL and falls back to `https://${domain}` when no base URL is available.
 
 ## Notes
 

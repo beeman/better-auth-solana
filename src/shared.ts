@@ -17,6 +17,7 @@ export interface SIWSOptions {
   nonceExpirationMs?: number
   profileLookup?: SIWSProfileLookupFn
   schema?: InferOptionSchema<typeof import('./solana-storage.ts').solanaWalletSchema>
+  uri?: string
   verifySignature?: VerifySolanaSignatureFn
 }
 

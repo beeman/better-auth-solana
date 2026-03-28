@@ -153,6 +153,7 @@ async function createHarness(options?: {
   getNonce?: SIWSGetNonceFn
   nonceExpirationMs?: number
   profileLookup?: SIWSProfileLookupFn
+  uri?: string
   verifySignature?: VerifySolanaSignatureFn
 }) {
   const db: MemoryDB = {
@@ -176,6 +177,7 @@ async function createHarness(options?: {
         getNonce: options?.getNonce,
         nonceExpirationMs: options?.nonceExpirationMs,
         profileLookup: options?.profileLookup,
+        uri: options?.uri,
         verifySignature: options?.verifySignature,
       }),
     ],
@@ -401,6 +403,41 @@ test('uses the configured getNonce hook for nonce issuance', async () => {
 
   expect(callCount).toBe(1)
   expect(nonceResult.data?.nonce).toBe(customNonce)
+})
+
+test('uses the Better Auth base URL for nonce issuance when uri is not configured', async () => {
+  const harness = await createHarness()
+  const signer = await generateKeyPairSigner()
+  const nonceResult = await harness.authClient.siws.nonce({
+    walletAddress: signer.address,
+  })
+
+  expect(nonceResult.data?.uri).toBe('https://example.com/api/auth')
+})
+
+test('uses the configured uri for nonce issuance', async () => {
+  const customURI = 'https://example.com/custom-auth'
+  const harness = await createHarness({
+    uri: customURI,
+  })
+  const signer = await generateKeyPairSigner()
+  const nonceResult = await harness.authClient.siws.nonce({
+    walletAddress: signer.address,
+  })
+
+  expect(nonceResult.data?.uri).toBe(customURI)
+})
+
+test('falls back to the Better Auth base URL when the configured uri is empty', async () => {
+  const harness = await createHarness({
+    uri: '',
+  })
+  const signer = await generateKeyPairSigner()
+  const nonceResult = await harness.authClient.siws.nonce({
+    walletAddress: signer.address,
+  })
+
+  expect(nonceResult.data?.uri).toBe('https://example.com/api/auth')
 })
 
 test('uses the configured verifySignature hook for verify', async () => {
