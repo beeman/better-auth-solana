@@ -5,7 +5,6 @@
     "": {
       "name": "better-auth-solana",
       "dependencies": {
-        "@better-auth/core": "^1.5.0",
         "zod": "^4.3.6",
       },
       "devDependencies": {

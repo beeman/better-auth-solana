@@ -552,7 +552,6 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
   const address = signer.address
   const adapterCalls: string[] = []
   const deletedIdentifiers: string[] = []
-  const createdAccounts: Array<Record<string, unknown>> = []
   const now = new Date()
   const challenge = {
     domain: 'example.com',
@@ -599,10 +598,8 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
       adapter: baseAdapter as never,
       baseURL: 'https://example.com/api/auth',
       internalAdapter: {
-        createAccount: async (data) => {
-          createdAccounts.push(data)
-
-          return data
+        createAccount: async () => {
+          throw new Error('Unexpected createAccount call')
         },
         createSession: async () => {
           throw new Error('Unexpected createSession call')
@@ -640,17 +637,14 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
     },
   })
   expect(adapterCalls).toContain('base:transaction')
+  expect(adapterCalls).not.toContain('base:create:account')
   expect(adapterCalls).not.toContain('base:create:solanaWallet')
+  expect(adapterCalls).not.toContain('base:findOne:account')
   expect(adapterCalls).not.toContain('base:findOne:solanaWallet')
+  expect(adapterCalls.filter((value) => value === 'transaction:create:account')).toHaveLength(1)
   expect(adapterCalls.filter((value) => value === 'transaction:create:solanaWallet')).toHaveLength(1)
+  expect(adapterCalls.filter((value) => value === 'transaction:findOne:account')).toHaveLength(1)
   expect(adapterCalls.filter((value) => value === 'transaction:findOne:solanaWallet')).toHaveLength(2)
-  expect(createdAccounts).toEqual([
-    expect.objectContaining({
-      accountId: address,
-      providerId: 'siws',
-      userId: 'user-1',
-    }),
-  ])
   expect(deletedIdentifiers).toEqual([`siws:${address}`])
 })
 test('authClient.siws.nonce and verify create a native Better Auth session, wallet, and account', async () => {

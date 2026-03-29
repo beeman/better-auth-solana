@@ -1,4 +1,4 @@
-import { defineErrorCodes } from '@better-auth/core/utils/error-codes'
+import { defineErrorCodes } from 'better-auth'
 
 export const SIWS_ERROR_CODES = defineErrorCodes({
   EMAIL_REQUIRED: 'Email is required when anonymous is disabled.',

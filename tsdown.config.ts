@@ -10,7 +10,7 @@ export default defineConfig({
   },
   format: ['esm', 'cjs'],
   // These transitive modules are intentionally bundled via @solana/kit and
-  // @better-auth/core. Keep the allowlist explicit so CI still catches any
+  // Better Auth public exports. Keep the allowlist explicit so CI still catches any
   // newly bundled dependencies.
   inlineOnly: ['@solana/addresses', '@solana/keys', '@solana/nominal-types', 'better-call'],
   sourcemap: true,

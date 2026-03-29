@@ -1,7 +1,5 @@
-import { getCurrentAdapter, runWithTransaction } from '@better-auth/core/context'
-import type { DBAdapter, DBTransactionAdapter } from '@better-auth/core/db/adapter'
 import { isAddress, isSignature } from '@solana/kit'
-import type { BetterAuthPlugin, Session, User } from 'better-auth'
+import type { BetterAuthPlugin, DBAdapter, DBTransactionAdapter, Session, User } from 'better-auth'
 import { APIError, createAuthEndpoint, sessionMiddleware } from 'better-auth/api'
 import { setSessionCookie } from 'better-auth/cookies'
 import { mergeSchema } from 'better-auth/db'
@@ -73,10 +71,6 @@ function buildSIWSUserResponse(args: { userId: string; walletAddress: string }) 
   }
 }
 
-function buildAccountId(args: { walletAddress: string }) {
-  return args.walletAddress
-}
-
 function assertChallengeMatchesMessage(args: {
   challenge: SIWSNonceResponse
   message: ReturnType<typeof parseSIWSMessage>
@@ -122,6 +116,16 @@ function buildVerificationIdentifier(args: { walletAddress: string }) {
   return `siws:${args.walletAddress}`
 }
 
+function buildNewAccount(accountId: string, userId: string) {
+  return {
+    accountId,
+    createdAt: new Date(),
+    providerId: 'siws',
+    updatedAt: new Date(),
+    userId,
+  }
+}
+
 function getFallbackEmailDomainName(args: { baseURL?: string; emailDomainName?: string }) {
   if (args.emailDomainName) {
     return args.emailDomainName
@@ -139,21 +143,37 @@ function getFallbackEmailDomainName(args: { baseURL?: string; emailDomainName?: 
 }
 
 async function ensureSIWSAccount(args: { context: SIWSContext; userId: string; walletAddress: string }) {
-  const accountId = buildAccountId({
-    walletAddress: args.walletAddress,
-  })
+  const accountId = args.walletAddress
   const existingAccount = await args.context.internalAdapter.findAccountByProviderId(accountId, 'siws')
 
   if (existingAccount) {
     return
   }
+  const newAccount = buildNewAccount(accountId, args.userId)
+  await args.context.internalAdapter.createAccount(newAccount)
+}
 
-  await args.context.internalAdapter.createAccount({
-    accountId,
-    createdAt: new Date(),
-    providerId: 'siws',
-    updatedAt: new Date(),
-    userId: args.userId,
+async function ensureSIWSAccountWithAdapter(args: {
+  adapter: SIWSAdapter | SIWSTransactionAdapter
+  userId: string
+  walletAddress: string
+}) {
+  const accountId = args.walletAddress
+  const existingAccount = await args.adapter.findOne({
+    model: 'account',
+    where: [
+      { field: 'accountId', operator: 'eq', value: accountId },
+      { field: 'providerId', operator: 'eq', value: 'siws' },
+    ],
+  })
+
+  if (existingAccount) {
+    return
+  }
+  const newAccount = buildNewAccount(accountId, args.userId)
+  await args.adapter.create({
+    data: newAccount,
+    model: 'account',
   })
 }
 
@@ -382,8 +402,7 @@ export async function linkSIWSWallet(args: {
     walletAddress,
   })
 
-  return runWithTransaction(context.adapter, async () => {
-    const adapter = await getCurrentAdapter(context.adapter)
+  return context.adapter.transaction(async (adapter) => {
     const existingWallet = await findSIWSWalletByAddress({
       adapter,
       address: walletAddress,
@@ -394,8 +413,8 @@ export async function linkSIWSWallet(args: {
         userId,
         wallet: existingWallet,
       })
-      await ensureSIWSAccount({
-        context,
+      await ensureSIWSAccountWithAdapter({
+        adapter,
         userId,
         walletAddress,
       })
@@ -420,8 +439,8 @@ export async function linkSIWSWallet(args: {
       isPrimary,
       userId,
     })
-    await ensureSIWSAccount({
-      context,
+    await ensureSIWSAccountWithAdapter({
+      adapter,
       userId,
       walletAddress,
     })

@@ -1,4 +1,4 @@
-import type { DBAdapter } from '@better-auth/core/db/adapter'
+import type { DBAdapter } from 'better-auth'
 import type { BetterAuthPluginDBSchema } from 'better-auth/db'
 import { z } from 'zod'
 import type { SIWSWalletRecord } from './shared.ts'
