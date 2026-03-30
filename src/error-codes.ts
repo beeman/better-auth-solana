@@ -1,4 +1,27 @@
-import { defineErrorCodes } from 'better-auth'
+type ErrorCode<K extends string = string> = {
+  readonly code: K
+  message: string
+  toString: () => K
+}
+
+function defineErrorCodes<const T extends Record<string, string>>(
+  codes: T,
+): {
+  [K in keyof T & string]: ErrorCode<K>
+} {
+  return Object.fromEntries(
+    Object.entries(codes).map(([key, value]) => [
+      key,
+      {
+        code: key,
+        message: value,
+        toString: () => key,
+      },
+    ]),
+  ) as {
+    [K in keyof T & string]: ErrorCode<K>
+  }
+}
 
 export const SIWS_ERROR_CODES = defineErrorCodes({
   EMAIL_REQUIRED: 'Email is required when anonymous is disabled.',
