@@ -1,0 +1,4 @@
+interface:
+  display_name: "Better Auth Solana"
+  short_description: "Integrate SIWS into Better Auth apps"
+  default_prompt: "Use $better-auth-solana to integrate Sign in With Solana into a Better Auth backend and React, React Native, or Expo client."
