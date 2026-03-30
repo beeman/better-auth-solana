@@ -10,10 +10,25 @@ It exposes three public entrypoints:
 - `better-auth-solana/client` for client helpers
 - `better-auth-solana/schema` for the default Solana wallet schema
 
+## AI Agent Skill
+
+If you use AI coding agents such as Codex, Claude Code, or OpenCode in a skills-enabled setup, install the companion skill with:
+
+```bash
+npx skills add beeman/better-auth-solana
+```
+
+For deeper integration guidance, see:
+
+- [Backend](./skills/better-auth-solana/references/backend.md)
+- [React Native and Expo](./skills/better-auth-solana/references/react-native-expo.md)
+- [React web](./skills/better-auth-solana/references/react-web.md)
+- [Schema and tables](./skills/better-auth-solana/references/schema.md)
+
 ## Install
 
 ```bash
-bun add @solana/kit better-auth better-auth-solana
+bun add @solana/kit better-auth better-auth-solana@latest
 ```
 
 ## Server
@@ -38,15 +53,21 @@ The plugin adds these Better Auth endpoints:
 - `POST /siws/nonce`
 - `POST /siws/verify`
 
+These are plugin subpaths under your Better Auth handler. If Better Auth is mounted under `/api/auth/*`, for example, `POST /siws/verify` becomes `POST /api/auth/siws/verify`.
+
 `POST /siws/link` accepts `{ walletAddress, message, signature }`, requires an authenticated Better Auth session, verifies the signed SIWS payload, persists a `solanaWallet` row when needed, persists an `account` row with `providerId: "siws"` when needed, and keeps the current session intact.
 
 `POST /siws/nonce` accepts `{ walletAddress }` and stores a challenge in Better Auth verification storage under `siws:<walletAddress>`.
 
 `POST /siws/verify` accepts `{ walletAddress, message, signature, email? }`, verifies the signed SIWS payload, creates or reuses the Better Auth user, persists a `solanaWallet` row, persists an `account` row with `providerId: "siws"`, and establishes the Better Auth session with native session cookies.
 
+For backend wiring, cookies, and origin handling, see [Backend](./skills/better-auth-solana/references/backend.md).
+
 ## Client
 
 `better-auth-solana/client` exports `siwsClient()` for Better Auth client inference and `createSIWSInput(...)` for building the wallet sign-in payload.
+
+Use `authClient.siws.verify(...)` for SIWS sign-in when the wallet flow should create or resume the Better Auth session. Use `authClient.siws.link(...)` only when the user already has a Better Auth session and wants to attach another wallet.
 
 ```ts
 import { createAuthClient } from 'better-auth/client'
@@ -83,6 +104,8 @@ const session = await authClient.getSession()
 
 The server validates the signed message against the issued `domain`, `uri`, `nonce`, `issuedAt`, and `expirationTime`. The `statement` remains client-controlled.
 
+For platform-specific client guidance, see [React Native and Expo](./skills/better-auth-solana/references/react-native-expo.md) and [React web](./skills/better-auth-solana/references/react-web.md).
+
 ## Default Schema
 
 ```ts
@@ -99,6 +122,10 @@ The default `solanaWallet` model contains:
 The plugin stores one wallet row per address and one SIWS account row per wallet address.
 
 The first Solana wallet row created for a user is marked `isPrimary: true`. Additional Solana wallet rows for that user are marked `isPrimary: false`.
+
+SIWS also depends on Better Auth's standard `account`, `session`, `user`, and `verification` tables. The package writes `solanaWallet` directly and uses Better Auth internals for the other models.
+
+For schema composition and table expectations, see [Schema and tables](./skills/better-auth-solana/references/schema.md).
 
 ## Options
 
@@ -127,8 +154,10 @@ When `uri` is a non-empty string, issued challenges use it verbatim. Otherwise S
 - The account id format is `<walletAddress>`.
 - The account provider id is `siws`.
 - The client surface is `authClient.siws.link(...)`, `authClient.siws.nonce(...)`, and `authClient.siws.verify(...)`.
-- Better Auth's `last-login-method` plugin currently recognizes `siwe`, not `siws`. If you use it with this plugin, add a `customResolveMethod` that maps `/siws/verify` to `siws`.
+- If your app already uses Better Auth's `last-login-method` plugin, add a `customResolveMethod` that maps `/siws/verify` to `siws`.
 - The package name is `better-auth-solana`; the plugin namespace is `siws`.
+
+The Better Auth docs currently describe default `last-login-method` detection for email and OAuth flows. Because SIWS is a custom flow, map it explicitly when you use that plugin. See Better Auth's [Last Login Method](https://canary.better-auth.com/docs/plugins/last-login-method) and [SIWE](https://better-auth.com/docs/plugins/siwe) docs for the surrounding Better Auth behavior.
 
 Example `last-login-method` resolver:
 
