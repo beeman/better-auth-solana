@@ -37,6 +37,7 @@ Default to `npm install @solana/kit better-auth better-auth-solana@latest` unles
 - Import `siws` from `better-auth-solana`.
 - Import `createSIWSInput` and `siwsClient` from `better-auth-solana/client`.
 - Import `solanaWalletSchema` from `better-auth-solana/schema` when the task is about schema composition or documentation.
+- When the user asks for a non-default tag such as `@canary`, verify the installed package types and exports locally before assuming the latest documented examples still match exactly.
 
 ## Integration Notes
 
@@ -44,6 +45,9 @@ Default to `npm install @solana/kit better-auth better-auth-solana@latest` unles
 - Preserve existing Better Auth tables and app-specific columns. Only require the fields that the package actually reads or writes.
 - Prefer `nonce -> createSIWSInput -> wallet sign-in -> link` only when a Better Auth session already exists and the user is attaching another wallet.
 - Prefer `nonce -> createSIWSInput -> wallet sign-in -> verify` for first-party SIWS sign-in flows.
+- With `@wallet-ui/react`, `UiWallet.features` and `UiWalletAccount.features` are arrays of supported feature identifiers, not Wallet Standard feature objects.
+- With `@wallet-ui/react`, resolve feature methods through its re-exported helpers such as `getWalletFeature(...)` and `getWalletAccountFeature(...)` instead of indexing `wallet.features[...]`.
+- With `@wallet-ui/react`, detect support with `.includes("solana:signIn")` or `.includes("solana:signMessage")`. Do not treat `features` like an object map.
 
 ## Built-In Coverage
 

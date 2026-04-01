@@ -10,6 +10,8 @@ npm install @solana/kit better-auth better-auth-solana@latest
 
 Add the app's existing wallet library on top of that. The reference apps use `@wallet-ui/react`, but the Better Auth side only requires a wallet sign-in function that can sign the SIWS payload.
 
+If the app uses `@wallet-ui/react`, prefer its re-exported `getWalletFeature(...)` and `getWalletAccountFeature(...)` helpers instead of adding a separate `@wallet-standard/ui` dependency.
+
 ## Auth Client Setup
 
 Use `better-auth/react` with `siwsClient()`:
@@ -37,6 +39,14 @@ Use this flow for browser-wallet SIWS:
 5. Convert the signature bytes to a base58 string when the wallet library returns raw bytes.
 6. Call `authClient.siws.verify(...)`.
 7. Refresh the page state or invalidate auth-dependent queries.
+
+If the app uses `@wallet-ui/react`, keep these rules in mind:
+
+- `UiWallet.features` is an array of feature names such as `["solana:signIn", "solana:signMessage"]`.
+- `UiWalletAccount.features` is also an array of feature names.
+- Do not call `wallet.features["solana:signIn"]` or use `solanaSignInFeature in wallet.features`.
+- Detect support with `.includes(...)`.
+- Resolve the underlying Wallet Standard feature object through the helpers re-exported by `@wallet-ui/react`.
 
 Use this pattern as the baseline:
 
@@ -83,6 +93,74 @@ const message = createSIWSMessage({
 
 const signed = await signMessage(new TextEncoder().encode(message))
 ```
+
+Use this pattern when the app uses `@wallet-ui/react` and needs direct access to `solana:signIn` or `solana:signMessage`:
+
+```ts
+import { getBase58Decoder } from '@solana/kit'
+import {
+  getWalletAccountFeature,
+  getWalletFeature,
+  SolanaSignIn,
+  SolanaSignMessage,
+  type SolanaSignInFeature,
+  type SolanaSignMessageFeature,
+  type UiWallet,
+  type UiWalletAccount,
+} from '@wallet-ui/react'
+import { createSIWSInput, createSIWSMessage } from 'better-auth-solana/client'
+
+function getSolanaSignInFeature(wallet: UiWallet | undefined) {
+  if (!wallet?.features.includes(SolanaSignIn)) {
+    return null
+  }
+
+  return getWalletFeature(wallet, SolanaSignIn) as SolanaSignInFeature[typeof SolanaSignIn]
+}
+
+function getSolanaSignMessageFeature(account: UiWalletAccount | undefined) {
+  if (!account?.features.includes(SolanaSignMessage)) {
+    return null
+  }
+
+  return getWalletAccountFeature(
+    account,
+    SolanaSignMessage,
+  ) as SolanaSignMessageFeature[typeof SolanaSignMessage]
+}
+
+const signInFeature = getSolanaSignInFeature(wallet)
+const signMessageFeature = getSolanaSignMessageFeature(account)
+const siwsArgs = {
+  address,
+  challenge: nonce.data,
+  statement: 'Sign in to My App',
+}
+const siwsInput = createSIWSInput(siwsArgs)
+const siwsMessage = createSIWSMessage(siwsArgs)
+
+let signed
+
+if (signInFeature) {
+  const [signInResult] = await signInFeature.signIn(siwsInput)
+  signed = signInResult
+} else if (signMessageFeature && account) {
+  const [signMessageResult] = await signMessageFeature.signMessage({
+    account,
+    message: new TextEncoder().encode(siwsMessage),
+  })
+  signed = signMessageResult
+}
+
+if (!signed) {
+  throw new Error('Wallet did not return a SIWS payload')
+}
+
+const message = new TextDecoder().decode(signed.signedMessage)
+const signature = getBase58Decoder().decode(signed.signature)
+```
+
+In that setup, `solana:signIn` support is detected at the wallet level and `solana:signMessage` fallback support is detected at the account level.
 
 ## Link Flow
 
