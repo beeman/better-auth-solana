@@ -65,7 +65,11 @@ For backend wiring, cookies, and origin handling, see [Backend](./skills/better-
 
 ## Client
 
-`better-auth-solana/client` exports `siwsClient()` for Better Auth client inference and `createSIWSInput(...)` for building the wallet sign-in payload.
+`better-auth-solana/client` exports `createSIWSInput(...)`, `createSIWSMessage(...)`, `formatSIWSMessage(...)`, and `siwsClient()` for Better Auth client inference.
+
+- Use `createSIWSInput(...)` when the wallet library accepts structured SIWS input.
+- Use `createSIWSMessage(...)` when the wallet library expects the raw SIWS message string.
+- Use `formatSIWSMessage(...)` when you already have the SIWS fields and only need the canonical message string.
 
 Use `authClient.siws.verify(...)` for SIWS sign-in when the wallet flow should create or resume the Better Auth session. Use `authClient.siws.link(...)` only when the user already has a Better Auth session and wants to attach another wallet.
 
@@ -100,6 +104,20 @@ await authClient.siws.verify({
 })
 
 const session = await authClient.getSession()
+```
+
+For raw `signMessage` flows, build the SIWS string directly:
+
+```ts
+import { createSIWSMessage } from 'better-auth-solana/client'
+
+const message = createSIWSMessage({
+  address,
+  challenge: nonceResult.data,
+  statement: 'Sign in to Example',
+})
+
+const signed = await signMessage(new TextEncoder().encode(message))
 ```
 
 The server validates the signed message against the issued `domain`, `uri`, `nonce`, `issuedAt`, and `expirationTime`. The `statement` remains client-controlled.

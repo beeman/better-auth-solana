@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import type { SIWSNonceResponse } from './shared.ts'
 
+export type { FormatSIWSMessageInput } from './siws-message.ts'
+export { formatSIWSMessage } from './siws-message.ts'
+
 export interface ParsedSIWSMessage {
   address: string
   domain: string
@@ -19,33 +22,6 @@ const fieldSchema = z.object({
   URI: z.string().min(1),
   Version: z.string().min(1),
 })
-
-export function formatSIWSMessage(input: {
-  address: string
-  domain: string
-  expirationTime: string
-  issuedAt: string
-  nonce: string
-  statement?: string
-  uri: string
-  version?: string
-}) {
-  const lines = [`${input.domain} wants you to sign in with your Solana account:`, input.address, '']
-
-  if (input.statement) {
-    lines.push(input.statement, '')
-  }
-
-  lines.push(
-    `URI: ${input.uri}`,
-    `Version: ${input.version ?? '1'}`,
-    `Nonce: ${input.nonce}`,
-    `Issued At: ${input.issuedAt}`,
-    `Expiration Time: ${input.expirationTime}`,
-  )
-
-  return lines.join('\n')
-}
 
 export function parseSIWSMessage(message: string): ParsedSIWSMessage {
   const normalizedMessage = message.replaceAll('\r\n', '\n')

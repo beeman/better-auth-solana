@@ -70,6 +70,20 @@ const verifyResult = await authClient.siws.verify({
 })
 ```
 
+If the wallet library only exposes a raw `signMessage` flow, build the SIWS string first:
+
+```ts
+import { createSIWSMessage } from 'better-auth-solana/client'
+
+const message = createSIWSMessage({
+  address,
+  challenge: nonce.data,
+  statement: 'Sign in to My App',
+})
+
+const signed = await signMessage(new TextEncoder().encode(message))
+```
+
 ## Link Flow
 
 Use `authClient.siws.link(...)` only when the user already has a Better Auth session and wants to attach a wallet to that existing user record.

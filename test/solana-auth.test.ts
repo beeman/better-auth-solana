@@ -4,7 +4,7 @@ import { betterAuth } from 'better-auth'
 import { memoryAdapter } from 'better-auth/adapters/memory'
 import { createAuthClient } from 'better-auth/client'
 import { convertSetCookieToCookie } from 'better-auth/test'
-import { createSIWSInput, siwsClient } from '../src/client.ts'
+import { createSIWSMessage, siwsClient } from '../src/client.ts'
 import { SIWS_ERROR_CODES } from '../src/error-codes.ts'
 import { siws } from '../src/index.ts'
 import type { SIWSGetNonceFn, SIWSProfileLookupFn } from '../src/shared.ts'
@@ -211,21 +211,10 @@ function createMessage(args: {
   }
   statement?: string
 }) {
-  const signInInput = createSIWSInput({
+  return createSIWSMessage({
     address: args.address,
     challenge: args.challenge,
     statement: args.statement ?? 'Sign in to Example',
-  })
-
-  return formatSIWSMessage({
-    address: signInInput.address,
-    domain: signInInput.domain,
-    expirationTime: signInInput.expirationTime,
-    issuedAt: signInInput.issuedAt,
-    nonce: signInInput.nonce,
-    statement: signInInput.statement,
-    uri: signInInput.uri,
-    version: signInInput.version,
   })
 }
 
