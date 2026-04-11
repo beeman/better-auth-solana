@@ -17,6 +17,7 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ESNext",
+    "types": ["bun"],
     "verbatimModuleSyntax": true
   },
   "exclude": ["dist", "node_modules"],
