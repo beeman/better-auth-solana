@@ -137,7 +137,7 @@ The default `solanaWallet` model contains:
 - `isPrimary`
 - `userId`
 
-The plugin stores one wallet row per address and one SIWS account row per wallet address.
+The default schema marks `address` as unique. The plugin stores one wallet row per address and one SIWS account row per wallet address.
 
 The first Solana wallet row created for a user is marked `isPrimary: true`. Additional Solana wallet rows for that user are marked `isPrimary: false`.
 

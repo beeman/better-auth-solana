@@ -11,6 +11,7 @@ export const solanaWalletSchema = {
       address: {
         required: true,
         type: 'string',
+        unique: true,
       },
       createdAt: {
         required: true,

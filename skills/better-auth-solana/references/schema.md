@@ -43,7 +43,10 @@ export const solanaWallet = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
-  (table) => [index('solana_wallet_userId_idx').on(table.userId)],
+  (table) => [
+    index('solana_wallet_userId_idx').on(table.userId),
+    uniqueIndex('solana_wallet_address_idx').on(table.address),
+  ],
 )
 ```
 
@@ -70,7 +73,7 @@ Keep the standard Better Auth tables available because SIWS depends on them:
 ## Index And Constraint Notes
 
 - Index `userId` on `solanaWallet`.
-- Prefer a unique `address` constraint when the application can enforce one-wallet-per-address at the database layer.
+- Preserve a unique `address` constraint on `solanaWallet`.
 - Preserve any existing app-specific columns and indexes that do not break the required fields above.
 
 ## Example Extended Table

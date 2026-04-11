@@ -22,6 +22,7 @@ test('exports the siws server, client, and schema entrypoints', () => {
         address: {
           required: true,
           type: 'string',
+          unique: true,
         },
         createdAt: {
           required: true,
@@ -42,6 +43,14 @@ test('exports the siws server, client, and schema entrypoints', () => {
         },
       },
     },
+  })
+})
+
+test('default schema enforces unique wallet addresses', () => {
+  expect(solanaWalletSchema.solanaWallet.fields.address).toEqual({
+    required: true,
+    type: 'string',
+    unique: true,
   })
 })
 
