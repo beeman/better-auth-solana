@@ -189,6 +189,7 @@ async function createHarness(options?: {
   const client = createHarnessClient(auth.handler)
 
   return {
+    auth,
     authClient: client.authClient,
     createClient: () => createHarnessClient(auth.handler),
     customFetchImpl: client.customFetchImpl,
@@ -598,6 +599,9 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
         },
         createVerificationValue: async () => {
           throw new Error('Unexpected createVerificationValue call')
+        },
+        deleteUser: async () => {
+          throw new Error('Unexpected deleteUser call')
         },
         deleteVerificationByIdentifier: async (identifier) => {
           deletedIdentifiers.push(identifier)
@@ -1022,4 +1026,140 @@ test('uses profileLookup only when creating a brand-new SIWS user', async () => 
     image: 'https://example.com/avatar.png',
     name: `Wallet ${signer.address}`,
   })
+})
+
+test('verify does not leave partial user, wallet, or account rows behind when session creation fails', async () => {
+  expect.assertions(4)
+
+  const harness = await createHarness()
+  const authContext = await harness.auth.$context
+  const originalCreateSession = authContext.internalAdapter.createSession
+
+  try {
+    authContext.internalAdapter.createSession = async () => {
+      throw new Error('session creation failed')
+    }
+
+    const signer = await generateKeyPairSigner()
+    const nonceResult = await harness.authClient.siws.nonce({
+      walletAddress: signer.address,
+    })
+
+    if (!nonceResult.data) {
+      throw new Error('Expected SIWS nonce response')
+    }
+
+    const message = createMessage({
+      address: signer.address,
+      challenge: nonceResult.data,
+    })
+    const signature = await signMessage({
+      address: signer.address,
+      message,
+      signer,
+    })
+    const response = await harness.customFetchImpl('https://example.com/api/auth/siws/verify', {
+      body: JSON.stringify({
+        message,
+        signature,
+        walletAddress: signer.address,
+      }),
+      headers: {
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(500)
+    expect(getRows<AccountRow>(harness.db, 'account')).toHaveLength(0)
+    expect(getRows<SolanaWalletRow>(harness.db, 'solanaWallet')).toHaveLength(0)
+    expect(getRows<UserRow>(harness.db, 'user')).toHaveLength(0)
+  } finally {
+    authContext.internalAdapter.createSession = originalCreateSession
+  }
+})
+
+test('verify keeps a recreated SIWS account when session creation fails for an existing wallet', async () => {
+  expect.assertions(4)
+
+  const harness = await createHarness()
+  const signer = await generateKeyPairSigner()
+  const signInResult = await signIn({
+    authClient: harness.authClient,
+    signer,
+  })
+  const authContext = await harness.auth.$context
+  const originalCreateSession = authContext.internalAdapter.createSession
+  const verifyClient = harness.createClient()
+  const accounts = getRows<AccountRow>(harness.db, 'account')
+
+  accounts.splice(
+    0,
+    accounts.length,
+    ...accounts.filter(
+      (value) =>
+        !(
+          value.accountId === signer.address &&
+          value.providerId === 'siws' &&
+          value.userId === signInResult.verifyResult.user.id
+        ),
+    ),
+  )
+
+  try {
+    authContext.internalAdapter.createSession = async () => {
+      throw new Error('session creation failed')
+    }
+
+    const nonceResult = await verifyClient.authClient.siws.nonce({
+      walletAddress: signer.address,
+    })
+
+    if (!nonceResult.data) {
+      throw new Error('Expected SIWS nonce response')
+    }
+
+    const message = createMessage({
+      address: signer.address,
+      challenge: nonceResult.data,
+    })
+    const signature = await signMessage({
+      address: signer.address,
+      message,
+      signer,
+    })
+    const response = await verifyClient.customFetchImpl('https://example.com/api/auth/siws/verify', {
+      body: JSON.stringify({
+        message,
+        signature,
+        walletAddress: signer.address,
+      }),
+      headers: {
+        'content-type': 'application/json',
+      },
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(500)
+    expect(getRows<AccountRow>(harness.db, 'account')).toEqual([
+      expect.objectContaining({
+        accountId: signer.address,
+        providerId: 'siws',
+        userId: signInResult.verifyResult.user.id,
+      }),
+    ])
+    expect(getRows<SolanaWalletRow>(harness.db, 'solanaWallet')).toEqual([
+      expect.objectContaining({
+        address: signer.address,
+        userId: signInResult.verifyResult.user.id,
+      }),
+    ])
+    expect(getRows<UserRow>(harness.db, 'user')).toEqual([
+      expect.objectContaining({
+        id: signInResult.verifyResult.user.id,
+      }),
+    ])
+  } finally {
+    authContext.internalAdapter.createSession = originalCreateSession
+  }
 })

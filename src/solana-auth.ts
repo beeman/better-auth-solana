@@ -48,6 +48,7 @@ interface SIWSInternalAdapter {
   createSession(userId: string): Promise<SIWSStoredSession | null>
   createUser(user: { email: string; image?: string; name: string }): Promise<SIWSStoredUser>
   createVerificationValue(data: { expiresAt: Date; identifier: string; value: string }): Promise<unknown>
+  deleteUser(userId: string): Promise<void>
   deleteVerificationByIdentifier(identifier: string): Promise<void>
   findAccountByProviderId(accountId: string, providerId: string): Promise<unknown | null>
   findUserById(userId: string): Promise<SIWSStoredUser | null>
@@ -62,6 +63,9 @@ interface SIWSContext {
   adapter: DBAdapter
   baseURL?: string
   internalAdapter: SIWSInternalAdapter
+  logger?: {
+    debug(message: string, ...args: unknown[]): void
+  }
 }
 
 function buildSIWSUserResponse(args: { userId: string; walletAddress: string }) {
@@ -140,6 +144,53 @@ function getFallbackEmailDomainName(args: { baseURL?: string; emailDomainName?: 
   } catch {
     return 'localhost'
   }
+}
+
+async function rollbackCreatedSIWSUser(args: { context: SIWSContext; userId: string; walletAddress: string }) {
+  try {
+    await args.context.adapter.delete({
+      model: 'solanaWallet',
+      where: [
+        { field: 'address', operator: 'eq', value: args.walletAddress },
+        { field: 'userId', operator: 'eq', value: args.userId },
+      ],
+    })
+  } catch (error) {
+    logRollbackFailure({
+      context: args.context,
+      error,
+      operation: 'adapter.delete(solanaWallet)',
+      userId: args.userId,
+      walletAddress: args.walletAddress,
+    })
+  }
+
+  try {
+    await args.context.internalAdapter.deleteUser(args.userId)
+  } catch (error) {
+    logRollbackFailure({
+      context: args.context,
+      error,
+      operation: 'internalAdapter.deleteUser(user)',
+      userId: args.userId,
+      walletAddress: args.walletAddress,
+    })
+  }
+}
+
+function logRollbackFailure(args: {
+  context: SIWSContext
+  error: unknown
+  operation: string
+  userId: string
+  walletAddress: string
+}) {
+  args.context.logger?.debug('[siws] rollback cleanup failed', {
+    error: args.error,
+    operation: args.operation,
+    userId: args.userId,
+    walletAddress: args.walletAddress,
+  })
 }
 
 async function ensureSIWSAccount(args: { context: SIWSContext; userId: string; walletAddress: string }) {
@@ -329,58 +380,71 @@ export async function verifySIWSMessage(args: {
     adapter: context.adapter,
     address: walletAddress,
   })
+  let createdUserId: string | null = null
   let user: SIWSStoredUser | null = null
 
-  if (existingWallet) {
-    user = await context.internalAdapter.findUserById(existingWallet.userId)
+  try {
+    if (existingWallet) {
+      user = await context.internalAdapter.findUserById(existingWallet.userId)
 
-    if (!user) {
-      throw APIError.from('INTERNAL_SERVER_ERROR', SIWS_ERROR_CODES.USER_NOT_FOUND_FOR_WALLET)
+      if (!user) {
+        throw APIError.from('INTERNAL_SERVER_ERROR', SIWS_ERROR_CODES.USER_NOT_FOUND_FOR_WALLET)
+      }
+    } else {
+      const resolvedEmailDomainName = getFallbackEmailDomainName({
+        baseURL: context.baseURL,
+        emailDomainName,
+      })
+      const profile =
+        (await profileLookup?.({
+          walletAddress,
+        })) ?? null
+      user = await context.internalAdapter.createUser({
+        email: !anonymous && email ? email : `${walletAddress}@${resolvedEmailDomainName}`,
+        image: profile?.avatar ?? '',
+        name: profile?.name ?? walletAddress,
+      })
+      createdUserId = user.id
+
+      await createSIWSWallet({
+        adapter: context.adapter,
+        address: walletAddress,
+        isPrimary: true,
+        userId: user.id,
+      })
     }
-  } else {
-    const resolvedEmailDomainName = getFallbackEmailDomainName({
-      baseURL: context.baseURL,
-      emailDomainName,
-    })
-    const profile =
-      (await profileLookup?.({
-        walletAddress,
-      })) ?? null
-    user = await context.internalAdapter.createUser({
-      email: !anonymous && email ? email : `${walletAddress}@${resolvedEmailDomainName}`,
-      image: profile?.avatar ?? '',
-      name: profile?.name ?? walletAddress,
-    })
 
-    await createSIWSWallet({
-      adapter: context.adapter,
-      address: walletAddress,
-      isPrimary: true,
-      userId: user.id,
-    })
-  }
-
-  await ensureSIWSAccount({
-    context,
-    userId: user.id,
-    walletAddress,
-  })
-
-  const session = await context.internalAdapter.createSession(user.id)
-
-  if (!session) {
-    throw APIError.from('INTERNAL_SERVER_ERROR', SIWS_ERROR_CODES.FAILED_TO_CREATE_SESSION)
-  }
-
-  return {
-    _session: session,
-    _user: user,
-    success: true,
-    token: session.token,
-    user: buildSIWSUserResponse({
+    await ensureSIWSAccount({
+      context,
       userId: user.id,
       walletAddress,
-    }),
+    })
+
+    const session = await context.internalAdapter.createSession(user.id)
+
+    if (!session) {
+      throw APIError.from('INTERNAL_SERVER_ERROR', SIWS_ERROR_CODES.FAILED_TO_CREATE_SESSION)
+    }
+
+    return {
+      _session: session,
+      _user: user,
+      success: true,
+      token: session.token,
+      user: buildSIWSUserResponse({
+        userId: user.id,
+        walletAddress,
+      }),
+    }
+  } catch (error) {
+    if (createdUserId) {
+      await rollbackCreatedSIWSUser({
+        context,
+        userId: createdUserId,
+        walletAddress,
+      })
+    }
+    throw error
   }
 }
 
