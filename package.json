@@ -53,7 +53,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "skills/better-auth-solana"
   ],
   "homepage": "https://github.com/beeman/better-auth-solana",
   "keywords": [
@@ -82,6 +83,7 @@
     "build": "tsdown",
     "changeset": "changeset",
     "check-types": "tsc -b --noEmit",
+    "check:package-readme-links": "bun test ./test/package-readme-links.test.ts",
     "ci": "bun run --sequential build syncpack:lint lint check-types test",
     "compatibility": "bun run --sequential build check-types test",
     "lint": "biome check --error-on-warnings",

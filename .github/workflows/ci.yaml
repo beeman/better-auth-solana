@@ -35,6 +35,9 @@ jobs:
       - name: Check package
         run: bun x publint
 
+      - name: Check package README links
+        run: bun run check:package-readme-links
+
       - name: Publish to pkg.pr.new
         run: bun pkg-pr-new publish --packageManager=bun .
 

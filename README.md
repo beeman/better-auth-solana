@@ -18,6 +18,8 @@ If you use AI coding agents such as Codex, Claude Code, or OpenCode in a skills-
 npx skills add beeman/better-auth-solana
 ```
 
+You can also inspect the packaged skill directly in `node_modules` at [skills/better-auth-solana/SKILL.md](./skills/better-auth-solana/SKILL.md).
+
 For deeper integration guidance, see:
 
 - [Backend](./skills/better-auth-solana/references/backend.md)
