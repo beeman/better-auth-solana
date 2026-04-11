@@ -57,6 +57,6 @@ export function siwsClient() {
   } satisfies BetterAuthClientPlugin
 }
 
-export { formatSIWSMessage, SIWS_ERROR_CODES }
 export type { FormatSIWSMessageInput } from './siws-message.ts'
 export type { SIWSLinkResponse, SIWSNonceResponse, SIWSVerifyResponse }
+export { formatSIWSMessage, SIWS_ERROR_CODES }
