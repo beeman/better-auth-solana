@@ -1,113 +1,99 @@
 # AGENTS.md
 
-Centralised AI agent instructions. Add coding guidelines, style guides, and project context here.
+This repository contains the `better-auth-solana` package, a Bun-based Better Auth plugin for Solana sign-in.
 
-Ruler concatenates all .md files in this directory (and subdirectories), starting with AGENTS.md (if present), then remaining files in sorted order.
+The package publishes three public entrypoints:
 
-# Runtime is Bun
+- `better-auth-solana`
+- `better-auth-solana/client`
+- `better-auth-solana/schema`
 
-Default to using Bun instead of Node.js.
+Treat exported runtime behavior, exported types, the schema contract, and the published bundle shape as public API. Changes in those areas need the same care as any other breaking surface.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
+## Repository Workflow
 
-## APIs
+Use Bun for all local work.
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+- `bun install`
+- `bun run build`
+- `bun run check-types`
+- `bun run test`
+- `bun run test:watch`
+- `bun run compatibility`
+- `bun run ci`
+- `bun run lint:fix`
 
-## Testing
+When linting fails, run `bun run lint:fix` first. It applies the repo's automatic fixes and is often faster than reading the diagnostics and making each change manually.
 
-Use `bun test` to run tests.
+`bun run ci` is the standard pre-merge check. Leave the repository passing before you consider the work complete.
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+## Package Structure
 
-test("hello world", () => {
-  expect(1).toBe(1);
-});
-```
+Keep the package shape stable and intentional.
 
-## Frontend
+- `src/index.ts` is the server/plugin entrypoint.
+- `src/client.ts` serves as the browser-safe client entrypoint.
+- `src/schema.ts` provides the schema entrypoint.
+- `dist/` is generated output from `bun run build`. Do not edit generated files by hand.
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+Tests and examples that validate package behavior should import from the public entrypoints whenever possible. Prefer exercising the package the way a consumer would use it instead of reaching through deep internal paths.
 
-Server:
+## Better Auth Integration Boundary
 
-```ts#index.ts
-import index from "./index.html"
+Build this library against Better Auth public exports.
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
+- Use public `better-auth`, `better-auth/api`, `better-auth/client`, `better-auth/cookies`, `better-auth/db`, and other documented public entrypoints.
+- Keep `@better-auth/core` out of `package.json`.
+- Do not add runtime helpers, adapter access, or new integration paths that depend on `@better-auth/core`.
+- Do not treat Better Auth internals as extension points for new features in this package.
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+If Better Auth typing still requires a `declare module '@better-auth/core'` augmentation, keep it isolated to the augmentation itself. That is a narrow typing exception, not permission to add runtime imports or a package dependency.
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+## Client Bundle Contract
 
-With the following `frontend.tsx`:
+Everything reachable from `src/client.ts` must stay browser-safe.
 
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
+- Keep the client entrypoint free of server-only and heavy runtime imports.
+- Do not allow the published client bundle to pull in `@better-auth/core`, `better-auth`, or `zod`.
+- Preserve the split between server/plugin code and client helpers so consumers can use `better-auth-solana/client` in browser and Expo environments without server baggage.
 
-// import .css files directly and it works
-import './index.css';
+`test/client-bundle.test.ts` is the guardrail for this contract. If a change touches the client entrypoint, keep that test meaningful and passing.
 
-const root = createRoot(document.body);
+## Dependency Management
 
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
+Dependency policy in this repo is enforced, not advisory.
 
-root.render(<Frontend />);
-```
+- `bunfig.toml` sets `exact = true`, so Bun saves exact versions by default.
+- `bunfig.toml` also sets `minimumReleaseAge = 432000`, which means new packages must be at least 5 days old before they are accepted.
+- `syncpack.config.ts` and `bun run syncpack:lint` enforce pinned `devDependencies`.
+- `lefthook.yaml` runs the Syncpack check in pre-commit, and CI runs it again.
 
-Then, run index.ts
+Use pinned versions for `devDependencies`. Use dependency ranges only where the package contract needs them, such as `dependencies` and `peerDependencies`.
 
-```sh
-bun --hot ./index.ts
-```
+When changing supported peer versions:
 
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+- update `peerDependencies` in `package.json`
+- update the `compatibility-peers` matrix in `.github/workflows/ci.yaml`
+- keep the `floor` and `current` compatibility lanes aligned with the supported peer story
+
+If peer dependency floors or current versions move, update both places in the same change. This includes the versions exercised by the `compatibility-peers` job.
+
+Keep `bun.lock` in sync with intentional dependency changes only. Compatibility installs should avoid rewriting repository state, which is why CI uses `bun add --no-save` for compatibility lanes.
+
+## Ordering And Style
+
+Prefer deterministic, machine-friendly ordering.
+
+- Alphabetize imports, exports, object keys, workflow jobs, and machine-ordered lists unless runtime or user-facing order must differ.
+- Let Biome do the routine sorting work where possible.
+- Keep source edits small and focused. This package is a library, so small structural changes can have outsized downstream effects.
+
+## Release Expectations
+
+Public-facing changes need a changeset.
+
+- Add or update a changeset for behavior, API, type-surface, compatibility, or packaging changes.
+- Keep packaging changes compatible with `publint` and the published entrypoint contract.
+- Leave the repository passing `bun run ci` before handing off release-ready work.
+
+Publishing is driven from `main`, but release readiness is prepared on the branch by keeping changesets, package metadata, and validation green.
