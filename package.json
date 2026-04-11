@@ -69,8 +69,7 @@
   "name": "better-auth-solana",
   "peerDependencies": {
     "@solana/kit": "^6.8.0",
-    "better-auth": "^1.5.0",
-    "typescript": "^5 || ^6"
+    "better-auth": "^1.5.0"
   },
   "publishConfig": {
     "access": "public"
@@ -84,6 +83,7 @@
     "changeset": "changeset",
     "check-types": "tsc -b --noEmit",
     "ci": "bun run --sequential build syncpack:lint lint check-types test",
+    "compatibility": "bun run --sequential build check-types test",
     "lint": "biome check --error-on-warnings",
     "lint:fix": "biome check --error-on-warnings --write",
     "prepare": "lefthook install",

@@ -50,6 +50,54 @@ jobs:
       - name: Check Types
         run: bun check-types
 
+  compatibility-peers:
+    name: compatibility peers (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - better_auth_version: 1.5.4
+            label: current
+            solana_kit_version: 6.8.0
+          - better_auth_version: 1.5.0
+            label: floor
+            solana_kit_version: 6.8.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup
+
+      - name: Install Compatibility Versions
+        run: bun add --no-save better-auth@${{ matrix.better_auth_version }} @solana/kit@${{ matrix.solana_kit_version }}
+
+      - name: Run Compatibility Suite
+        run: bun run compatibility
+
+  compatibility-typescript:
+    name: compatibility TypeScript (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - label: 5.x
+            typescript_version: 5
+          - label: 6.x
+            typescript_version: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup
+
+      - name: Install TypeScript Compatibility Version
+        run: bun add --no-save typescript@${{ matrix.typescript_version }}
+
+      - name: Run Compatibility Suite
+        run: bun run compatibility
+
   lint:
     runs-on: ubuntu-latest
     steps:
