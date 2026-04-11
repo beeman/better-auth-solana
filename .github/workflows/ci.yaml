@@ -59,7 +59,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - better_auth_version: 1.5.4
+          - better_auth_version: 1.6.0
             label: current
             solana_kit_version: 6.8.0
           - better_auth_version: 1.5.0
