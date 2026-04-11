@@ -1,0 +1,6 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: syncpack
+      glob: "package.json"
+      run: bun run syncpack:lint
