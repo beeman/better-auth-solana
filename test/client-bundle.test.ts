@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { createRequire } from 'node:module'
+import { readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 const DIST_DIRECTORY_URL = new URL('../dist/', import.meta.url)
@@ -41,26 +41,20 @@ async function collectClientArtifactNames(entryName: string) {
 test('builds a published client bundle without server-only runtime imports', async () => {
   await Bun.$`bun run build`
 
+  const distArtifactNames = (await readdir(fileURLToPath(DIST_DIRECTORY_URL))).sort()
   const esmModule = await import(new URL('../dist/client.mjs', import.meta.url).href)
-  const require = createRequire(import.meta.url)
-  const cjsModule = require(fileURLToPath(new URL('../dist/client.cjs', import.meta.url)))
-  const cjsArtifactNames = await collectClientArtifactNames('client.cjs')
   const esmArtifactNames = await collectClientArtifactNames('client.mjs')
 
-  expect(cjsArtifactNames).toContain('client.cjs')
+  expect(distArtifactNames.some((artifactName) => artifactName.endsWith('.cjs'))).toBe(false)
+  expect(distArtifactNames.some((artifactName) => artifactName.endsWith('.d.cts'))).toBe(false)
+  expect(esmArtifactNames).toContain('client.mjs')
   expect(typeof esmModule.createSIWSInput).toBe('function')
   expect(typeof esmModule.createSIWSMessage).toBe('function')
   expect(typeof esmModule.formatSIWSMessage).toBe('function')
   expect(typeof esmModule.siwsClient).toBe('function')
   expect(esmModule.SIWS_ERROR_CODES.INVALID_SIGNATURE.code).toBe('INVALID_SIGNATURE')
 
-  expect(typeof cjsModule.createSIWSInput).toBe('function')
-  expect(typeof cjsModule.createSIWSMessage).toBe('function')
-  expect(typeof cjsModule.formatSIWSMessage).toBe('function')
-  expect(typeof cjsModule.siwsClient).toBe('function')
-  expect(cjsModule.SIWS_ERROR_CODES.INVALID_SIGNATURE.code).toBe('INVALID_SIGNATURE')
-
-  for (const artifactName of [...cjsArtifactNames, ...esmArtifactNames]) {
+  for (const artifactName of esmArtifactNames) {
     const artifactContents = await Bun.file(fileURLToPath(new URL(artifactName, DIST_DIRECTORY_URL))).text()
 
     for (const forbiddenImportSpecifier of FORBIDDEN_IMPORT_SPECIFIERS) {
