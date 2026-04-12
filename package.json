@@ -84,7 +84,7 @@
     "changeset": "changeset",
     "check-types": "tsc -b --noEmit",
     "check:package-readme-links": "bun test ./test/package-readme-links.test.ts",
-    "ci": "bun run --sequential build syncpack:lint lint check-types test",
+    "ci": "bun run --sequential build syncpack:lint lint check-types test publint",
     "compatibility": "bun run --sequential build check-types test",
     "lint": "biome check --error-on-warnings",
     "lint:fix": "biome check --error-on-warnings --write",

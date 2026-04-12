@@ -132,14 +132,14 @@ For platform-specific client guidance, see [React Native and Expo](./skills/bett
 import { solanaWalletSchema } from 'better-auth-solana/schema'
 ```
 
-The default `solanaWallet` model contains:
+The default `solanaWallet` model defines these custom fields:
 
 - `address`
 - `createdAt`
 - `isPrimary`
 - `userId`
 
-The default schema marks `address` as unique. The plugin stores one wallet row per address and one SIWS account row per wallet address.
+Better Auth adapters commonly add a generated primary key such as `id`, so the list above describes the plugin-defined fields rather than the full persisted table shape. The default schema marks `address` as unique. The plugin stores one wallet row per address and one SIWS account row per wallet address.
 
 The first Solana wallet row created for a user is marked `isPrimary: true`. Additional Solana wallet rows for that user are marked `isPrimary: false`.
 
