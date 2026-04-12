@@ -177,7 +177,7 @@ When `uri` is a non-empty string, issued challenges use it verbatim. Otherwise S
 - If your app already uses Better Auth's `last-login-method` plugin, add a `customResolveMethod` that maps `/siws/verify` to `siws`.
 - The package name is `better-auth-solana`; the plugin namespace is `siws`.
 
-The Better Auth docs currently describe default `last-login-method` detection for email and OAuth flows. Because SIWS is a custom flow, map it explicitly when you use that plugin. See Better Auth's [Last Login Method](https://canary.better-auth.com/docs/plugins/last-login-method) and [SIWE](https://better-auth.com/docs/plugins/siwe) docs for the surrounding Better Auth behavior.
+The Better Auth docs currently describe default `last-login-method` detection for email and OAuth flows. Because SIWS is a custom flow, map it explicitly when you use that plugin. See Better Auth's [Last Login Method](https://better-auth.com/docs/plugins/last-login-method) and [SIWE](https://better-auth.com/docs/plugins/siwe) docs for the surrounding Better Auth behavior.
 
 Example `last-login-method` resolver:
 
