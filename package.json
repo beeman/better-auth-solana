@@ -7,7 +7,7 @@
   },
   "description": "Better Auth plugin for Solana sign-in.",
   "devDependencies": {
-    "@biomejs/biome": "2.4.10",
+    "@biomejs/biome": "2.4.11",
     "@changesets/cli": "2.30.0",
     "@intellectronica/ruler": "0.3.38",
     "@solana/kit": "6.8.0",
