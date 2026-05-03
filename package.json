@@ -16,7 +16,7 @@
     "lefthook": "2.1.6",
     "pkg-pr-new": "0.0.66",
     "publint": "0.3.18",
-    "syncpack": "14.3.0",
+    "syncpack": "14.3.1",
     "tsdown": "0.21.9",
     "typescript": "6.0.3"
   },
