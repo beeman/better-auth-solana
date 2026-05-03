@@ -73,7 +73,7 @@
     "prepare": "lefthook install",
     "release": "changeset publish",
     "ruler:apply": "ruler apply --local-only",
-    "syncpack:lint": "syncpack lint --config syncpack.config.ts --source package.json --dependency-types dev",
+    "syncpack:lint": "syncpack lint --source package.json --dependency-types dev",
     "test": "bun test ./test",
     "test:watch": "bun test --watch ./test",
     "version": "changeset version && bun lint:fix"
