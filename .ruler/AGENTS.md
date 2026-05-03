@@ -72,11 +72,11 @@ Use pinned versions for `devDependencies`. Use dependency ranges only where the 
 
 When changing supported peer versions:
 
-- update `peerDependencies` in `package.json`
-- update the `compatibility-peers` matrix in `.github/workflows/ci.yaml`
-- keep the `floor` and `current` compatibility lanes aligned with the supported peer story
+- `.github/workflows/ci.yaml`: keep the `compatibility-peers` job sourcing package versions from `package.json`
+- `devDependencies` in `package.json`: align with the current compatibility lane
+- `peerDependencies` in `package.json`: align with the supported floor
 
-If peer dependency floors or current versions move, update both places in the same change. This includes the versions exercised by the `compatibility-peers` job.
+If peer dependency floors or current versions move, update the relevant `package.json` fields in the same change. The `compatibility-peers` job should exercise those package-sourced versions.
 
 Keep `bun.lock` in sync with intentional dependency changes only. Compatibility installs should avoid rewriting repository state, which is why CI uses `bun add --no-save` for compatibility lanes.
 

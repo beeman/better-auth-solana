@@ -59,12 +59,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - better_auth_version: 1.6.5
+          - dependency_source: devDependencies
             label: current
-            solana_kit_version: 6.8.0
-          - better_auth_version: 1.5.0
+          - dependency_source: peerDependencies
             label: floor
-            solana_kit_version: 6.8.0
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -73,7 +71,17 @@ jobs:
         uses: ./.github/actions/setup
 
       - name: Install Compatibility Versions
-        run: bun add --no-save better-auth@${{ matrix.better_auth_version }} @solana/kit@${{ matrix.solana_kit_version }}
+        env:
+          DEPENDENCY_SOURCE: ${{ matrix.dependency_source }}
+        run: |
+          dependency_version() {
+            bun pm pkg get "$DEPENDENCY_SOURCE.$1" | jq -r 'sub("^[~^]"; "")'
+          }
+
+          better_auth_version="$(dependency_version "better-auth")"
+          solana_kit_version="$(dependency_version "@solana/kit")"
+
+          bun add --no-save "better-auth@${better_auth_version}" "@solana/kit@${solana_kit_version}"
 
       - name: Run Compatibility Suite
         run: bun run compatibility
