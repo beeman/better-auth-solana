@@ -46,11 +46,10 @@ interface SIWSInternalAdapter {
     userId: string
   }): Promise<unknown>
   createSession(userId: string): Promise<SIWSStoredSession | null>
-  createUser(user: { email: string; image?: string; name: string }): Promise<SIWSStoredUser>
+  createUser(user: { email: string; image?: string; name: string }, source: { method: 'siws' }): Promise<SIWSStoredUser>
   createVerificationValue(data: { expiresAt: Date; identifier: string; value: string }): Promise<unknown>
   deleteUser(userId: string): Promise<void>
   deleteVerificationByIdentifier(identifier: string): Promise<void>
-  findAccountByProviderId(accountId: string, providerId: string): Promise<unknown | null>
   findUserById(userId: string): Promise<SIWSStoredUser | null>
   findVerificationValue(identifier: string): Promise<{
     expiresAt: Date | string
@@ -195,7 +194,13 @@ function logRollbackFailure(args: {
 
 async function ensureSIWSAccount(args: { context: SIWSContext; userId: string; walletAddress: string }) {
   const accountId = args.walletAddress
-  const existingAccount = await args.context.internalAdapter.findAccountByProviderId(accountId, 'siws')
+  const existingAccount = await args.context.adapter.findOne({
+    model: 'account',
+    where: [
+      { field: 'accountId', operator: 'eq', value: accountId },
+      { field: 'providerId', operator: 'eq', value: 'siws' },
+    ],
+  })
 
   if (existingAccount) {
     return
@@ -399,11 +404,14 @@ export async function verifySIWSMessage(args: {
         (await profileLookup?.({
           walletAddress,
         })) ?? null
-      user = await context.internalAdapter.createUser({
-        email: !anonymous && email ? email : `${walletAddress}@${resolvedEmailDomainName}`,
-        image: profile?.avatar ?? '',
-        name: profile?.name ?? walletAddress,
-      })
+      user = await context.internalAdapter.createUser(
+        {
+          email: !anonymous && email ? email : `${walletAddress}@${resolvedEmailDomainName}`,
+          image: profile?.avatar ?? '',
+          name: profile?.name ?? walletAddress,
+        },
+        { method: 'siws' },
+      )
       createdUserId = user.id
 
       await createSIWSWallet({

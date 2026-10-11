@@ -6,7 +6,7 @@ export default defineConfig({
   // Better Auth public exports. Keep the allowlist explicit so CI still catches any
   // newly bundled dependencies.
   deps: {
-    onlyBundle: ['@solana/addresses', '@solana/keys', '@solana/nominal-types', 'better-call'],
+    onlyBundle: ['@solana/addresses', '@solana/keys', '@solana/nominal-types', 'better-call', 'rou3'],
   },
   dts: true,
   entry: {
