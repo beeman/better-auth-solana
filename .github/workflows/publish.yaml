@@ -52,12 +52,12 @@ jobs:
         run: bun run check:package-readme-links
 
       - name: Publish to NPM
-        uses: changesets/action@22ccf9aa43179fe9e27dc62e575971d28cce197c # v1
+        uses: changesets/action@22ccf9aa43179fe9e27dc62e575971d28cce197c # v2
         with:
-          commit: "chore: update versions"
-          publish: npm run release
-          title: "chore: update versions"
-          version: bun run version
+          commit-message: "chore: update versions"
+          pr-title: "chore: update versions"
+          publish-script: npm run release
+          version-script: bun run version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
