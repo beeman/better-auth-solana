@@ -1,5 +1,15 @@
 # better-auth-solana
 
+## 1.1.0
+
+### Minor Changes
+
+- 252b6ed: Support consumers upgrading to @solana/kit 8 by updating the peer requirement from ^6.8.0 to ^8.4.0.
+
+### Patch Changes
+
+- 252b6ed: Fix valid Solana sign-ins returning HTTP 500 on Better Auth 1.7 by looking up accounts through the public database adapter.
+
 ## 1.0.0
 
 ### Major Changes
