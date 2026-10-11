@@ -52,7 +52,7 @@ jobs:
         run: bun run check:package-readme-links
 
       - name: Publish to NPM
-        uses: changesets/action@22ccf9aa43179fe9e27dc62e575971d28cce197c # v2
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2
         with:
           commit-message: "chore: update versions"
           pr-title: "chore: update versions"
