@@ -606,7 +606,6 @@ test('linkSIWSWallet uses the transaction adapter for wallet writes', async () =
         deleteVerificationByIdentifier: async (identifier) => {
           deletedIdentifiers.push(identifier)
         },
-        findAccountByProviderId: async () => null,
         findUserById: async () => null,
         findVerificationValue: async () => ({
           expiresAt: new Date(now.getTime() + 60_000),
