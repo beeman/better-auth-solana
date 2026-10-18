@@ -17,7 +17,7 @@
     "pkg-pr-new": "0.0.90",
     "publint": "0.3.25",
     "syncpack": "15.3.3",
-    "tsdown": "0.21.10",
+    "tsdown": "0.23.1",
     "typescript": "6.0.3"
   },
   "exports": {
