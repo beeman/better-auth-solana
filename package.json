@@ -11,7 +11,7 @@
     "@changesets/cli": "3.0.3",
     "@intellectronica/ruler": "0.3.40",
     "@solana/kit": "8.4.0",
-    "@types/bun": "1.3.13",
+    "@types/bun": "1.4.3",
     "better-auth": "1.7.7",
     "lefthook": "2.1.6",
     "pkg-pr-new": "0.0.90",
